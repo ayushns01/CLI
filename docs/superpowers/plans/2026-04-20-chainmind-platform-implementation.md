@@ -6,7 +6,7 @@
 
 **Architecture:** ChainMind should be implemented as a TypeScript monorepo. Shared domain packages handle chains, RPCs, wallets, contracts, transactions, debugging, memory, policies, and the agent runtime; the CLI and web app both consume those packages instead of reimplementing logic in separate stacks.
 
-**Tech Stack:** TypeScript, Node.js, pnpm workspaces, oclif, viem, SQLite, Vitest, Next.js, Anvil, Slither
+**Tech Stack:** TypeScript, Node.js, npm workspaces, Node native TypeScript strip-types support, Node test runner, oclif, viem, SQLite, Vitest, Next.js, Anvil, Slither
 
 ---
 
@@ -63,52 +63,57 @@
 6. Monitoring and automation
 7. Team, CI/CD, and web companion
 
+## Bootstrap Note
+
+The current repository bootstrap uses zero-dependency Node-native tooling first:
+
+- npm workspaces instead of `pnpm`
+- `node --experimental-strip-types` instead of a separate transpile step
+- the built-in `node:test` runner for the initial smoke test
+
+Later tasks can adopt `oclif` and Vitest once package installation is part of the active setup flow.
+
 ### Task 1: Bootstrap the TypeScript Monorepo and Base CLI
 
 **Files:**
 - Create: `package.json`
-- Create: `pnpm-workspace.yaml`
 - Create: `tsconfig.base.json`
-- Create: `vitest.workspace.ts`
 - Create: `apps/cli/package.json`
 - Create: `apps/cli/src/index.ts`
 - Create: `apps/cli/src/commands/root.ts`
 - Test: `apps/cli/src/commands/root.test.ts`
 
-- [ ] **Step 1: Initialize the workspace**
+- [x] **Step 1: Initialize the workspace**
 
-Run: `pnpm init`
+Run: `npm init -y`
 Expected: root `package.json` created
 
-- [ ] **Step 2: Add workspace and TypeScript configuration**
+- [x] **Step 2: Add workspace and TypeScript configuration**
 
 Create:
-- `pnpm-workspace.yaml`
 - `tsconfig.base.json`
-- `vitest.workspace.ts`
+- npm `workspaces` in `package.json`
 
 Add root scripts for:
-- `build`
 - `typecheck`
 - `test`
-- `lint`
 
-- [ ] **Step 3: Write the failing CLI smoke test**
+- [x] **Step 3: Write the failing CLI smoke test**
 
 Create `apps/cli/src/commands/root.test.ts` with a test that asserts the root command renders help text.
 
-- [ ] **Step 4: Run the smoke test to verify failure**
+- [x] **Step 4: Run the smoke test to verify failure**
 
-Run: `pnpm exec vitest run apps/cli/src/commands/root.test.ts`
-Expected: FAIL because the root CLI command is not implemented yet
+Run: `node --experimental-strip-types --test apps/cli/src/commands/root.test.ts`
+Expected: FAIL because the root CLI command is not implemented yet (`ERR_MODULE_NOT_FOUND`)
 
-- [ ] **Step 5: Implement the base CLI**
+- [x] **Step 5: Implement the base CLI**
 
 Create:
 - `apps/cli/src/index.ts`
 - `apps/cli/src/commands/root.ts`
 
-Use `oclif` and add placeholder command groups:
+Add placeholder command groups:
 - `wallet`
 - `chain`
 - `contract`
@@ -117,14 +122,14 @@ Use `oclif` and add placeholder command groups:
 - `agent`
 - `monitor`
 
-- [ ] **Step 6: Re-run the smoke test**
+- [x] **Step 6: Re-run the smoke test**
 
-Run: `pnpm exec vitest run apps/cli/src/commands/root.test.ts`
+Run: `node --experimental-strip-types --test apps/cli/src/commands/root.test.ts`
 Expected: PASS
 
-- [ ] **Step 7: Run baseline verification**
+- [x] **Step 7: Run baseline verification**
 
-Run: `pnpm test`
+Run: `npm test`
 Expected: PASS
 
 ### Task 2: Add Config Loading and Chain Registry

@@ -1,0 +1,15 @@
+{
+  "name": "chainmind",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "node --experimental-strip-types --test apps/cli/src/commands/root.test.ts",
+    "test:root": "node --experimental-strip-types --test apps/cli/src/commands/root.test.ts",
+    "typecheck": "node --experimental-strip-types apps/cli/src/index.ts --help"
+  }
+}

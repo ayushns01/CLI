@@ -6,7 +6,7 @@ The product vision is simple: a developer should be able to plan, deploy, intera
 
 ## Status
 
-This repository currently contains the architecture and decision package for the full project, not an implementation.
+This repository contains the architecture and decision package for the full project plus the first implementation slice: a zero-dependency TypeScript monorepo bootstrap and base CLI skeleton.
 
 ## Implementation Direction
 
@@ -20,6 +20,14 @@ The current implementation choice is:
 - Vitest for automated testing
 
 This replaces the earlier Go-first assumption in the initial draft planning notes.
+
+For the current bootstrap phase, the repo uses:
+
+- npm workspaces instead of `pnpm`, because `pnpm` is not installed in the local environment yet
+- Node 25's `--experimental-strip-types` support to run `.ts` files without a transpile step
+- Node's built-in test runner for the first CLI smoke test
+
+This keeps the initial scaffold dependency-light while preserving the TypeScript-first direction.
 
 ## Product Definition
 
