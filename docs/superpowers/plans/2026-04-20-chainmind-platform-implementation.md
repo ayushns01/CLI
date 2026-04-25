@@ -235,19 +235,19 @@ Expected: PASS
 - Create: `packages/rpc/src/benchmark.ts`
 - Create: `packages/rpc/src/manager.test.ts`
 
-- [ ] **Step 1: Write failing provider-selection tests**
+- [x] **Step 1: Write failing provider-selection tests**
 
 Cover:
 - fastest healthy provider wins
 - unhealthy provider is skipped
 - read-only retry path works
 
-- [ ] **Step 2: Run RPC tests**
+- [x] **Step 2: Run RPC tests**
 
-Run: `pnpm exec vitest run packages/rpc/src/manager.test.ts`
-Expected: FAIL
+Run: `node --experimental-strip-types --test packages/rpc/src/manager.test.ts`
+Expected: FAIL because `packages/rpc/src/manager.ts` is missing
 
-- [ ] **Step 3: Implement RPC selection**
+- [x] **Step 3: Implement RPC selection**
 
 Include:
 - latency scoring
@@ -255,9 +255,9 @@ Include:
 - fallback ordering
 - structured timeout and rate-limit errors
 
-- [ ] **Step 4: Re-run RPC tests**
+- [x] **Step 4: Re-run RPC tests**
 
-Run: `pnpm exec vitest run packages/rpc/src/manager.test.ts`
+Run: `node --experimental-strip-types --test packages/rpc/src/manager.test.ts`
 Expected: PASS
 
 ### Task 5: Deliver the `w3cli`-Style Core Commands
