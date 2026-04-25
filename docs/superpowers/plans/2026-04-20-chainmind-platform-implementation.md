@@ -408,6 +408,9 @@ Expected: PASS
 
 ### Task 8: Build Trace, Fork, and Debug Workflows
 
+Bootstrap note:
+The current implementation completes deterministic trace retrieval adapters, decoded call-stack report construction, structured revert-explainer inputs, local fork lifecycle adapters, and CLI renderers. Live RPC debug tracing and real Anvil subprocess management remain follow-up work once provider bindings and external tool setup are introduced.
+
 **Files:**
 - Create: `packages/debug/package.json`
 - Create: `packages/debug/src/trace.ts`
@@ -418,28 +421,28 @@ Expected: PASS
 - Create: `apps/cli/src/commands/fork.ts`
 - Test: `tests/e2e/debug-tx.test.ts`
 
-- [ ] **Step 1: Write failing debug tests**
+- [x] **Step 1: Write failing debug tests**
 
 Cover:
 - trace retrieval by tx hash
 - decoded call stack output
 - local fork startup and teardown
 
-- [ ] **Step 2: Run debug tests**
+- [x] **Step 2: Run debug tests**
 
-Run: `pnpm exec vitest run packages/debug/src/debug.test.ts tests/e2e/debug-tx.test.ts`
+Run: `node --experimental-strip-types --test packages/debug/src/debug.test.ts tests/e2e/debug-tx.test.ts`
 Expected: FAIL
 
-- [ ] **Step 3: Implement trace and fork workflows**
+- [x] **Step 3: Implement trace and fork workflows**
 
 Ship:
 - `chainmind trace <txHash>`
 - `chainmind fork <network>`
 - structured inputs for future AI failure explanation
 
-- [ ] **Step 4: Re-run debug tests**
+- [x] **Step 4: Re-run debug tests**
 
-Run: `pnpm exec vitest run packages/debug/src/debug.test.ts tests/e2e/debug-tx.test.ts`
+Run: `node --experimental-strip-types --test packages/debug/src/debug.test.ts tests/e2e/debug-tx.test.ts`
 Expected: PASS
 
 ### Task 9: Add Workspace Memory, Run History, and `.chainmind.yaml`
