@@ -14,12 +14,12 @@
 
 - `package.json`
   Root workspace scripts and shared dependencies.
-- `pnpm-workspace.yaml`
+- `package.json` workspaces
   Monorepo package layout.
 - `tsconfig.base.json`
   Shared TypeScript config.
-- `vitest.workspace.ts`
-  Shared test configuration.
+- Node test runner
+  Current zero-dependency test runner for early bootstrap tests.
 - `apps/cli/package.json`
   CLI package manifest.
 - `apps/cli/src/index.ts`
@@ -144,26 +144,26 @@ Expected: PASS
 - Create: `configs/chains/mainnet.json`
 - Create: `configs/chains/testnet.json`
 
-- [ ] **Step 1: Write failing config tests**
+- [x] **Step 1: Write failing config tests**
 
 Cover:
 - loading local config
 - resolving default chain aliases
 - preparing for `.chainmind.yaml` parsing later
 
-- [ ] **Step 2: Write failing chain registry tests**
+- [x] **Step 2: Write failing chain registry tests**
 
 Cover:
 - lookup by chain name
 - lookup by chain ID
 - unsupported chain errors
 
-- [ ] **Step 3: Run targeted tests**
+- [x] **Step 3: Run targeted tests**
 
-Run: `pnpm exec vitest run packages/config/src/config.test.ts packages/chains/src/registry.test.ts`
-Expected: FAIL
+Run: `node --experimental-strip-types --test packages/config/src/config.test.ts packages/chains/src/registry.test.ts`
+Expected: FAIL because `packages/config/src/index.ts` and `packages/chains/src/index.ts` are missing
 
-- [ ] **Step 4: Implement config and chain registry**
+- [x] **Step 4: Implement config and chain registry**
 
 Support:
 - built-in chain metadata
@@ -171,9 +171,9 @@ Support:
 - native token symbols
 - testnet/mainnet markers
 
-- [ ] **Step 5: Re-run targeted tests**
+- [x] **Step 5: Re-run targeted tests**
 
-Run: `pnpm exec vitest run packages/config/src/config.test.ts packages/chains/src/registry.test.ts`
+Run: `node --experimental-strip-types --test packages/config/src/config.test.ts packages/chains/src/registry.test.ts`
 Expected: PASS
 
 ### Task 3: Build Wallet Storage, Signer Abstractions, and Session Scopes

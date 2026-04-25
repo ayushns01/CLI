@@ -1,0 +1,34 @@
+[
+  {
+    "key": "sepolia",
+    "name": "Sepolia",
+    "id": 11155111,
+    "environment": "testnet",
+    "aliases": ["ethereum-sepolia", "eth-sepolia"],
+    "nativeCurrency": {
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerUrl": "https://sepolia.etherscan.io",
+    "rpcUrls": [
+      "https://ethereum-sepolia-rpc.publicnode.com",
+      "https://rpc.sepolia.org"
+    ]
+  },
+  {
+    "key": "base-sepolia",
+    "name": "Base Sepolia",
+    "id": 84532,
+    "environment": "testnet",
+    "aliases": ["base sepolia", "base-testnet"],
+    "nativeCurrency": {
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerUrl": "https://sepolia.basescan.org",
+    "rpcUrls": [
+      "https://sepolia.base.org",
+      "https://base-sepolia-rpc.publicnode.com"
+    ]
+  }
+]

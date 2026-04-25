@@ -1,0 +1,34 @@
+[
+  {
+    "key": "ethereum",
+    "name": "Ethereum",
+    "id": 1,
+    "environment": "mainnet",
+    "aliases": ["eth", "ethereum-mainnet", "mainnet"],
+    "nativeCurrency": {
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerUrl": "https://etherscan.io",
+    "rpcUrls": [
+      "https://ethereum-rpc.publicnode.com",
+      "https://rpc.ankr.com/eth"
+    ]
+  },
+  {
+    "key": "base",
+    "name": "Base",
+    "id": 8453,
+    "environment": "mainnet",
+    "aliases": ["base-mainnet"],
+    "nativeCurrency": {
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerUrl": "https://basescan.org",
+    "rpcUrls": [
+      "https://mainnet.base.org",
+      "https://base-rpc.publicnode.com"
+    ]
+  }
+]
