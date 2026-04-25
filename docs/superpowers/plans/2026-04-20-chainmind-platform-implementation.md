@@ -186,14 +186,14 @@ Expected: PASS
 - Create: `packages/wallet/src/wallet.test.ts`
 - Modify: `apps/cli/src/commands/root.ts`
 
-- [ ] **Step 1: Write failing wallet tests**
+- [x] **Step 1: Write failing wallet tests**
 
 Cover:
 - saving a wallet label
 - resolving a wallet by label
 - handling unknown labels
 
-- [ ] **Step 2: Write failing scope tests**
+- [x] **Step 2: Write failing scope tests**
 
 Cover:
 - read-only scope
@@ -202,19 +202,19 @@ Cover:
 - broadcast scope
 - chain out-of-scope rejection
 
-- [ ] **Step 3: Run wallet tests**
+- [x] **Step 3: Run wallet tests**
 
-Run: `pnpm exec vitest run packages/wallet/src/wallet.test.ts`
-Expected: FAIL
+Run: `node --experimental-strip-types --test packages/wallet/src/wallet.test.ts`
+Expected: FAIL because wallet modules are missing
 
-- [ ] **Step 4: Implement wallet abstractions**
+- [x] **Step 4: Implement wallet abstractions**
 
 Add:
 - OS keychain adapter interface
 - labeled wallet storage
 - signer abstraction for future hardware wallet and Safe support
 
-- [ ] **Step 5: Implement session-scoped permissions**
+- [x] **Step 5: Implement session-scoped permissions**
 
 Support:
 - `read`
@@ -222,9 +222,9 @@ Support:
 - `sign`
 - `broadcast`
 
-- [ ] **Step 6: Re-run wallet tests**
+- [x] **Step 6: Re-run wallet tests**
 
-Run: `pnpm exec vitest run packages/wallet/src/wallet.test.ts`
+Run: `node --experimental-strip-types --test packages/wallet/src/wallet.test.ts`
 Expected: PASS
 
 ### Task 4: Implement RPC Manager and Provider Benchmarking
