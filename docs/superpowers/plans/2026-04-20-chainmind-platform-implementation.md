@@ -313,6 +313,9 @@ Expected: PASS
 
 ### Task 6: Build Artifact Ingestion, ERC-20 Deploy, and Generic Contract Deploy
 
+Bootstrap note:
+The current implementation completes artifact parsing, deploy-data construction, deployment metadata, ERC-20 deploy intent creation, verification request construction, and command renderers. Live transaction submission remains a follow-up after provider and signer bindings are introduced.
+
 **Files:**
 - Create: `packages/contracts/package.json`
 - Create: `packages/contracts/src/artifact-loader.ts`
@@ -323,14 +326,14 @@ Expected: PASS
 - Create: `apps/cli/src/commands/contract/deploy.ts`
 - Test: `tests/e2e/deploy-contract.test.ts`
 
-- [ ] **Step 1: Write failing artifact-loading tests**
+- [x] **Step 1: Write failing artifact-loading tests**
 
 Cover:
 - Hardhat artifact parsing
 - Foundry artifact parsing
 - missing ABI or bytecode failure
 
-- [ ] **Step 2: Write failing deployment tests**
+- [x] **Step 2: Write failing deployment tests**
 
 Cover:
 - constructor argument encoding
@@ -338,25 +341,25 @@ Cover:
 - receipt parsing
 - saved deployment metadata
 
-- [ ] **Step 3: Run contract tests**
+- [x] **Step 3: Run contract tests**
 
-Run: `pnpm exec vitest run packages/contracts/src/contracts.test.ts tests/e2e/deploy-contract.test.ts`
-Expected: FAIL
+Run: `node --experimental-strip-types --test packages/contracts/src/contracts.test.ts tests/e2e/deploy-contract.test.ts`
+Expected: FAIL because contract modules and command renderers are missing
 
-- [ ] **Step 4: Implement artifact ingestion and deployment**
+- [x] **Step 4: Implement artifact ingestion and deployment**
 
 Support:
 - ERC-20 deploy shortcut
 - generic artifact deploy
 - saved deployment output
 
-- [ ] **Step 5: Implement the first verification adapter**
+- [x] **Step 5: Implement the first verification adapter**
 
 Target one explorer backend first and hide it behind an abstraction.
 
-- [ ] **Step 6: Re-run contract tests**
+- [x] **Step 6: Re-run contract tests**
 
-Run: `pnpm exec vitest run packages/contracts/src/contracts.test.ts tests/e2e/deploy-contract.test.ts`
+Run: `node --experimental-strip-types --test packages/contracts/src/contracts.test.ts tests/e2e/deploy-contract.test.ts`
 Expected: PASS
 
 ### Task 7: Add Contract Studio, Previews, and Simulation
