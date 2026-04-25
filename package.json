@@ -8,11 +8,13 @@
     "packages/*"
   ],
   "scripts": {
-    "test": "node --experimental-strip-types --test apps/cli/src/commands/root.test.ts packages/config/src/config.test.ts packages/chains/src/registry.test.ts packages/wallet/src/wallet.test.ts packages/rpc/src/manager.test.ts",
+    "test": "node --experimental-strip-types --test apps/cli/src/commands/root.test.ts packages/config/src/config.test.ts packages/chains/src/registry.test.ts packages/wallet/src/wallet.test.ts packages/rpc/src/manager.test.ts packages/tx/src/core.test.ts tests/e2e/core-commands.test.ts",
     "test:chains": "node --experimental-strip-types --test packages/chains/src/registry.test.ts",
     "test:config": "node --experimental-strip-types --test packages/config/src/config.test.ts",
+    "test:core-commands": "node --experimental-strip-types --test packages/tx/src/core.test.ts tests/e2e/core-commands.test.ts",
     "test:rpc": "node --experimental-strip-types --test packages/rpc/src/manager.test.ts",
     "test:root": "node --experimental-strip-types --test apps/cli/src/commands/root.test.ts",
+    "test:tx": "node --experimental-strip-types --test packages/tx/src/core.test.ts",
     "test:wallet": "node --experimental-strip-types --test packages/wallet/src/wallet.test.ts",
     "typecheck": "node --experimental-strip-types apps/cli/src/index.ts --help"
   }

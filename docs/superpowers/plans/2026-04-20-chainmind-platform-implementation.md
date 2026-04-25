@@ -262,6 +262,9 @@ Expected: PASS
 
 ### Task 5: Deliver the `w3cli`-Style Core Commands
 
+Bootstrap note:
+The current implementation completes the deterministic command core without external dependencies. Balance and signing flows use injected client/signer interfaces; calldata helpers operate on explicit selectors and 32-byte words. Live `viem` binding and full ABI-based encoding remain follow-up work once package installation is active.
+
 **Files:**
 - Create: `packages/tx/package.json`
 - Create: `packages/tx/src/balance.ts`
@@ -277,7 +280,7 @@ Expected: PASS
 - Create: `apps/cli/src/commands/sign-message.ts`
 - Test: `tests/e2e/core-commands.test.ts`
 
-- [ ] **Step 1: Write failing deterministic-core tests**
+- [x] **Step 1: Write failing deterministic-core tests**
 
 Cover:
 - single-chain balance lookup
@@ -286,12 +289,12 @@ Cover:
 - gas estimation
 - message signing
 
-- [ ] **Step 2: Run unit and e2e tests**
+- [x] **Step 2: Run unit and e2e tests**
 
-Run: `pnpm exec vitest run packages/tx/src/core.test.ts tests/e2e/core-commands.test.ts`
-Expected: FAIL
+Run: `node --experimental-strip-types --test packages/tx/src/core.test.ts tests/e2e/core-commands.test.ts`
+Expected: FAIL because tx helpers and command renderers are missing
 
-- [ ] **Step 3: Implement the first real command set**
+- [x] **Step 3: Implement the first deterministic command set**
 
 Ship:
 - `chainmind balance`
@@ -301,11 +304,11 @@ Ship:
 - `chainmind gas estimate`
 - `chainmind sign-message`
 
-Use `viem` for chain access, calldata work, and client behavior.
+Current scope uses injected client and signer interfaces. Add `viem` binding after the dependency setup is introduced.
 
-- [ ] **Step 4: Re-run unit and e2e tests**
+- [x] **Step 4: Re-run unit and e2e tests**
 
-Run: `pnpm exec vitest run packages/tx/src/core.test.ts tests/e2e/core-commands.test.ts`
+Run: `node --experimental-strip-types --test packages/tx/src/core.test.ts tests/e2e/core-commands.test.ts`
 Expected: PASS
 
 ### Task 6: Build Artifact Ingestion, ERC-20 Deploy, and Generic Contract Deploy
