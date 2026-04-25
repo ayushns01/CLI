@@ -447,6 +447,9 @@ Expected: PASS
 
 ### Task 9: Add Workspace Memory, Run History, and `.chainmind.yaml`
 
+Bootstrap note:
+The current implementation uses Node's native `node:sqlite` module for local SQLite persistence and a small dependency-free YAML subset parser for `.chainmind.yaml`. The store persists wallet labels, contract metadata, run history, preferences, and environment profiles. Broader YAML support can be swapped behind `loadLocalConfig` when package installation is introduced.
+
 **Files:**
 - Create: `packages/memory/package.json`
 - Create: `packages/memory/src/sqlite-store.ts`
@@ -454,7 +457,7 @@ Expected: PASS
 - Create: `packages/memory/src/memory.test.ts`
 - Modify: `packages/config/src/index.ts`
 
-- [ ] **Step 1: Write failing persistence tests**
+- [x] **Step 1: Write failing persistence tests**
 
 Cover:
 - saved wallets
@@ -462,12 +465,12 @@ Cover:
 - run history
 - preferred chains
 
-- [ ] **Step 2: Run memory tests**
+- [x] **Step 2: Run memory tests**
 
-Run: `pnpm exec vitest run packages/memory/src/memory.test.ts`
+Run: `node --experimental-strip-types --test packages/memory/src/memory.test.ts packages/config/src/config.test.ts`
 Expected: FAIL
 
-- [ ] **Step 3: Implement SQLite-backed memory**
+- [x] **Step 3: Implement SQLite-backed memory**
 
 Persist:
 - wallets
@@ -476,7 +479,7 @@ Persist:
 - execution history
 - user preferences
 
-- [ ] **Step 4: Add `.chainmind.yaml` workspace parsing**
+- [x] **Step 4: Add `.chainmind.yaml` workspace parsing**
 
 Support:
 - project defaults
@@ -484,9 +487,9 @@ Support:
 - chain aliases
 - environment profiles
 
-- [ ] **Step 5: Re-run memory tests**
+- [x] **Step 5: Re-run memory tests**
 
-Run: `pnpm exec vitest run packages/memory/src/memory.test.ts`
+Run: `node --experimental-strip-types --test packages/memory/src/memory.test.ts packages/config/src/config.test.ts`
 Expected: PASS
 
 ### Task 10: Introduce the Agentic AI Runtime

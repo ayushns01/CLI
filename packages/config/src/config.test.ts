@@ -43,3 +43,39 @@ test("getDefaultConfigSearchPaths includes future workspace yaml support", () =>
     "/tmp/chainmind-project/.chainmind.yaml"
   ]);
 });
+
+test("loadLocalConfig reads .chainmind.yaml workspace defaults", () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "chainmind-config-"));
+  const configPath = path.join(tempDir, ".chainmind.yaml");
+
+  writeFileSync(
+    configPath,
+    [
+      "defaultChain: base-sepolia",
+      "defaultWallet: dev",
+      "preferredChains:",
+      "  - sepolia",
+      "  - base-sepolia",
+      "chainAliases:",
+      "  localBase: base-sepolia",
+      "knownAddresses:",
+      "  Token:",
+      "    base-sepolia: 0x2222222222222222222222222222222222222222",
+      "environments:",
+      "  devnet:",
+      "    defaultChain: base-sepolia",
+      "    rpcOverrides:",
+      "      base-sepolia:",
+      "        - https://rpc.example"
+    ].join("\n")
+  );
+
+  const config = loadLocalConfig(configPath);
+
+  assert.equal(config.defaultChain, "base-sepolia");
+  assert.equal(config.defaultWallet, "dev");
+  assert.deepEqual(config.preferredChains, ["sepolia", "base-sepolia"]);
+  assert.equal(config.chainAliases?.localBase, "base-sepolia");
+  assert.equal(config.knownAddresses?.Token?.["base-sepolia"], "0x2222222222222222222222222222222222222222");
+  assert.deepEqual(config.environments?.devnet?.rpcOverrides?.["base-sepolia"], ["https://rpc.example"]);
+});
