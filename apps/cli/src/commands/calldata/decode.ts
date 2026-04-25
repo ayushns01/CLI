@@ -1,4 +1,4 @@
-import type { EncodedCalldataParts } from "../../../../../../packages/tx/src/calldata.ts";
+import type { EncodedCalldataParts } from "../../../../../packages/tx/src/calldata.ts";
 
 export function renderCalldataDecodeResult(decoded: EncodedCalldataParts): string {
   return [

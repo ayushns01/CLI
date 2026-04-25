@@ -8,14 +8,15 @@
     "packages/*"
   ],
   "scripts": {
-    "test": "node --experimental-strip-types --test apps/cli/src/commands/root.test.ts packages/config/src/config.test.ts packages/chains/src/registry.test.ts packages/wallet/src/wallet.test.ts packages/rpc/src/manager.test.ts packages/tx/src/core.test.ts tests/e2e/core-commands.test.ts packages/contracts/src/contracts.test.ts tests/e2e/deploy-contract.test.ts",
+    "test": "node --experimental-strip-types --test apps/cli/src/commands/root.test.ts packages/config/src/config.test.ts packages/chains/src/registry.test.ts packages/wallet/src/wallet.test.ts packages/rpc/src/manager.test.ts packages/tx/src/core.test.ts packages/tx/src/simulate.test.ts tests/e2e/core-commands.test.ts packages/contracts/src/contracts.test.ts tests/e2e/deploy-contract.test.ts tests/e2e/contract-interaction.test.ts",
     "test:chains": "node --experimental-strip-types --test packages/chains/src/registry.test.ts",
     "test:config": "node --experimental-strip-types --test packages/config/src/config.test.ts",
-    "test:contracts": "node --experimental-strip-types --test packages/contracts/src/contracts.test.ts tests/e2e/deploy-contract.test.ts",
+    "test:contracts": "node --experimental-strip-types --test packages/contracts/src/contracts.test.ts tests/e2e/deploy-contract.test.ts tests/e2e/contract-interaction.test.ts",
     "test:core-commands": "node --experimental-strip-types --test packages/tx/src/core.test.ts tests/e2e/core-commands.test.ts",
     "test:rpc": "node --experimental-strip-types --test packages/rpc/src/manager.test.ts",
     "test:root": "node --experimental-strip-types --test apps/cli/src/commands/root.test.ts",
-    "test:tx": "node --experimental-strip-types --test packages/tx/src/core.test.ts",
+    "test:studio": "node --experimental-strip-types --test packages/contracts/src/contracts.test.ts packages/tx/src/simulate.test.ts tests/e2e/contract-interaction.test.ts",
+    "test:tx": "node --experimental-strip-types --test packages/tx/src/core.test.ts packages/tx/src/simulate.test.ts",
     "test:wallet": "node --experimental-strip-types --test packages/wallet/src/wallet.test.ts",
     "typecheck": "node --experimental-strip-types apps/cli/src/index.ts --help"
   }

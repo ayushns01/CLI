@@ -1,4 +1,4 @@
-import type { GasEstimateResult } from "../../../../../../packages/tx/src/gas.ts";
+import type { GasEstimateResult } from "../../../../../packages/tx/src/gas.ts";
 
 export function renderGasEstimateResult(result: GasEstimateResult): string {
   return [

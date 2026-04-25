@@ -1,4 +1,4 @@
-import type { Erc20DeployIntent } from "../../../../../../packages/contracts/src/deployer.ts";
+import type { Erc20DeployIntent } from "../../../../../packages/contracts/src/deployer.ts";
 
 export function renderTokenDeployIntent(intent: Erc20DeployIntent): string {
   return [

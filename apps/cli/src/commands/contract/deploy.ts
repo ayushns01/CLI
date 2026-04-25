@@ -1,4 +1,4 @@
-import type { ContractDeploymentPlan, DeploymentRecord } from "../../../../../../packages/contracts/src/deployer.ts";
+import type { ContractDeploymentPlan, DeploymentRecord } from "../../../../../packages/contracts/src/deployer.ts";
 
 export function renderContractDeployPlan(plan: ContractDeploymentPlan): string {
   return [

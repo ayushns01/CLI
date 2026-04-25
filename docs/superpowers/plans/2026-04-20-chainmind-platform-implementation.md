@@ -364,6 +364,9 @@ Expected: PASS
 
 ### Task 7: Add Contract Studio, Previews, and Simulation
 
+Bootstrap note:
+The current implementation completes deterministic ABI studio helpers, write previews, simulation result handling, standard `Error(string)` revert decoding, and command renderers. Live contract reads/writes and Anvil or RPC-backed simulation remain follow-up work once provider and signer bindings are introduced.
+
 **Files:**
 - Create: `packages/contracts/src/studio.ts`
 - Create: `packages/tx/src/preview.ts`
@@ -372,35 +375,35 @@ Expected: PASS
 - Create: `apps/cli/src/commands/contract/studio.ts`
 - Test: `tests/e2e/contract-interaction.test.ts`
 
-- [ ] **Step 1: Write failing interaction tests**
+- [x] **Step 1: Write failing interaction tests**
 
 Cover:
 - ABI-driven read calls
 - write-call argument parsing
 - preview rendering
 
-- [ ] **Step 2: Write failing simulation tests**
+- [x] **Step 2: Write failing simulation tests**
 
 Cover:
 - simulate-before-broadcast
 - decoded revert reason output
 - simulation mismatch handling
 
-- [ ] **Step 3: Run interaction tests**
+- [x] **Step 3: Run interaction tests**
 
-Run: `pnpm exec vitest run packages/tx/src/simulate.test.ts tests/e2e/contract-interaction.test.ts`
+Run: `node --experimental-strip-types --test packages/contracts/src/contracts.test.ts packages/tx/src/simulate.test.ts tests/e2e/contract-interaction.test.ts`
 Expected: FAIL
 
-- [ ] **Step 4: Implement studio and simulation flows**
+- [x] **Step 4: Implement studio and simulation flows**
 
 Support:
 - interactive contract calls
 - preview before sign
 - simulate-before-send for risky writes
 
-- [ ] **Step 5: Re-run interaction tests**
+- [x] **Step 5: Re-run interaction tests**
 
-Run: `pnpm exec vitest run packages/tx/src/simulate.test.ts tests/e2e/contract-interaction.test.ts`
+Run: `node --experimental-strip-types --test packages/contracts/src/contracts.test.ts packages/tx/src/simulate.test.ts tests/e2e/contract-interaction.test.ts`
 Expected: PASS
 
 ### Task 8: Build Trace, Fork, and Debug Workflows

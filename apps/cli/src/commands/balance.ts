@@ -1,4 +1,4 @@
-import type { NativeBalanceResult } from "../../../../../packages/tx/src/balance.ts";
+import type { NativeBalanceResult } from "../../../../packages/tx/src/balance.ts";
 
 export function renderBalanceResult(result: NativeBalanceResult): string {
   return [

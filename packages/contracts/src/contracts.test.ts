@@ -8,6 +8,7 @@ import {
   buildErc20DeployIntent,
   createDeploymentRecord
 } from "./deployer.ts";
+import { buildContractReadCall, buildContractWriteCall, listContractFunctions } from "./studio.ts";
 import { buildVerificationRequest } from "./verify.ts";
 
 const transferAbi = [
@@ -129,4 +130,83 @@ test("buildVerificationRequest hides explorer-specific details behind one reques
   assert.equal(request.provider, "explorer");
   assert.equal(request.chainKey, "base-sepolia");
   assert.equal(request.contractAddress, "0x3333333333333333333333333333333333333333");
+});
+
+test("listContractFunctions separates read and write ABI functions", () => {
+  const functions = listContractFunctions([
+    {
+      type: "function",
+      name: "balanceOf",
+      stateMutability: "view",
+      inputs: [{ name: "owner", type: "address" }],
+      outputs: [{ name: "balance", type: "uint256" }]
+    },
+    {
+      type: "function",
+      name: "transfer",
+      stateMutability: "nonpayable",
+      inputs: [
+        { name: "to", type: "address" },
+        { name: "amount", type: "uint256" }
+      ],
+      outputs: [{ name: "success", type: "bool" }]
+    },
+    { type: "event", name: "Transfer" }
+  ]);
+
+  assert.deepEqual(functions.map((entry) => [entry.name, entry.kind]), [
+    ["balanceOf", "read"],
+    ["transfer", "write"]
+  ]);
+});
+
+test("buildContractReadCall validates ABI-driven read calls", () => {
+  const artifact = parseContractArtifact({
+    contractName: "Token",
+    abi: [
+      {
+        type: "function",
+        name: "balanceOf",
+        stateMutability: "view",
+        inputs: [{ name: "owner", type: "address" }],
+        outputs: [{ name: "balance", type: "uint256" }]
+      }
+    ],
+    bytecode: "0x6000"
+  });
+
+  const call = buildContractReadCall({
+    artifact,
+    address: "0x3333333333333333333333333333333333333333",
+    functionName: "balanceOf",
+    args: ["0x2222222222222222222222222222222222222222"]
+  });
+
+  assert.equal(call.kind, "read");
+  assert.equal(call.contractName, "Token");
+  assert.equal(call.functionName, "balanceOf");
+  assert.deepEqual(call.args, ["0x2222222222222222222222222222222222222222"]);
+});
+
+test("buildContractWriteCall validates write-call argument parsing", () => {
+  const artifact = parseContractArtifact({
+    contractName: "Token",
+    abi: transferAbi,
+    bytecode: "0x6000"
+  });
+
+  const call = buildContractWriteCall({
+    artifact,
+    chainKey: "base-sepolia",
+    address: "0x3333333333333333333333333333333333333333",
+    from: "0x2222222222222222222222222222222222222222",
+    functionName: "transfer",
+    args: ["0x4444444444444444444444444444444444444444", "1000"],
+    calldata: "0xa9059cbb"
+  });
+
+  assert.equal(call.kind, "write");
+  assert.equal(call.chainKey, "base-sepolia");
+  assert.equal(call.from, "0x2222222222222222222222222222222222222222");
+  assert.equal(call.calldata, "0xa9059cbb");
 });
