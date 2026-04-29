@@ -2,3 +2,5 @@
 .npm/
 .DS_Store
 node_modules/
+graphify-out/
+.obsidian/
