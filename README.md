@@ -6,7 +6,21 @@ The product vision is simple: a developer should be able to plan, deploy, intera
 
 ## Status
 
-This repository contains the architecture and decision package for the full project plus the first implementation slice: a zero-dependency TypeScript monorepo bootstrap and base CLI skeleton.
+Tasks 1–11 are implemented and merged. The deterministic core, agent runtime, and monitoring engine are all functional with 120 passing tests.
+
+| Task | Package | Description |
+|------|---------|-------------|
+| 1 | `apps/cli` | Monorepo bootstrap and base CLI |
+| 2 | `packages/config`, `packages/chains` | Config loading and chain registry |
+| 3 | `packages/wallet` | Wallet storage, signer abstractions, session scopes |
+| 4 | `packages/rpc` | RPC manager and provider benchmarking |
+| 5 | `packages/tx` | Core commands: balance, calldata, gas, sign-message |
+| 6 | `packages/contracts` | Artifact ingestion, ERC-20 deploy, generic contract deploy |
+| 7 | `packages/contracts`, `packages/tx` | Contract studio, previews, and simulation |
+| 8 | `packages/debug` | Trace, fork, and debug workflows |
+| 9 | `packages/memory` | Workspace memory, run history, `.chainmind.yaml` |
+| 10 | `packages/agent` | Agentic AI runtime with intent parsing and approval gates |
+| 11 | `packages/monitor` | Monitoring engine: scheduler, watchers, alerts, policy runner |
 
 ## Implementation Direction
 
