@@ -1,6 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 
 import type {
+  AlertRecord,
   ContractMemoryRecord,
   EnvironmentProfile,
   RunHistoryRecord,
@@ -145,6 +146,66 @@ export class SqliteWorkspaceStore {
     return row ? mapEnvironment(row) : undefined;
   }
 
+  saveAlert(record: AlertRecord): void {
+    this.db
+      .prepare(
+        `insert into alerts (id, type, watcher_id, chain_key, address, message, severity, data_json, triggered_at, resolved_at)
+         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         on conflict(id) do update set
+           resolved_at = excluded.resolved_at`
+      )
+      .run(
+        record.id,
+        record.type,
+        record.watcherId,
+        record.chainKey ?? null,
+        record.address ?? null,
+        record.message,
+        record.severity,
+        record.dataJson,
+        record.triggeredAt,
+        record.resolvedAt ?? null
+      );
+  }
+
+  getAlert(id: string): AlertRecord | undefined {
+    const row = this.db
+      .prepare("select id, type, watcher_id, chain_key, address, message, severity, data_json, triggered_at, resolved_at from alerts where id = ?")
+      .get(id) as AlertRow | undefined;
+    return row ? mapAlert(row) : undefined;
+  }
+
+  listAlerts(filter?: { watcherId?: string; resolved?: boolean }): AlertRecord[] {
+    let sql = "select id, type, watcher_id, chain_key, address, message, severity, data_json, triggered_at, resolved_at from alerts";
+    const conditions: string[] = [];
+    const params: (string | null)[] = [];
+
+    if (filter?.watcherId !== undefined) {
+      conditions.push("watcher_id = ?");
+      params.push(filter.watcherId);
+    }
+    if (filter?.resolved === true) {
+      conditions.push("resolved_at is not null");
+    } else if (filter?.resolved === false) {
+      conditions.push("resolved_at is null");
+    }
+
+    if (conditions.length > 0) {
+      sql += " where " + conditions.join(" and ");
+    }
+    sql += " order by triggered_at desc";
+
+    const stmt = this.db.prepare(sql);
+    const rows = (params.length > 0 ? stmt.all(...params) : stmt.all()) as AlertRow[];
+    return rows.map(mapAlert);
+  }
+
+  resolveAlert(id: string): void {
+    this.db
+      .prepare("update alerts set resolved_at = ? where id = ?")
+      .run(new Date().toISOString(), id);
+  }
+
   close(): void {
     this.db.close();
   }
@@ -188,6 +249,19 @@ export class SqliteWorkspaceStore {
         name text primary key,
         default_chain text,
         rpc_overrides_json text not null
+      );
+
+      create table if not exists alerts (
+        id text primary key,
+        type text not null,
+        watcher_id text not null,
+        chain_key text,
+        address text,
+        message text not null,
+        severity text not null,
+        data_json text not null,
+        triggered_at text not null,
+        resolved_at text
       );
     `);
   }
@@ -266,5 +340,33 @@ function mapEnvironment(row: EnvironmentRow): EnvironmentProfile {
     name: row.name,
     defaultChain: row.default_chain ?? undefined,
     rpcOverrides: JSON.parse(row.rpc_overrides_json) as Record<string, string[]>
+  };
+}
+
+interface AlertRow {
+  id: string;
+  type: string;
+  watcher_id: string;
+  chain_key: string | null;
+  address: string | null;
+  message: string;
+  severity: string;
+  data_json: string;
+  triggered_at: string;
+  resolved_at: string | null;
+}
+
+function mapAlert(row: AlertRow): AlertRecord {
+  return {
+    id: row.id,
+    type: row.type as AlertRecord["type"],
+    watcherId: row.watcher_id,
+    chainKey: row.chain_key ?? undefined,
+    address: row.address ?? undefined,
+    message: row.message,
+    severity: row.severity as AlertRecord["severity"],
+    dataJson: row.data_json,
+    triggeredAt: row.triggered_at,
+    resolvedAt: row.resolved_at ?? undefined
   };
 }

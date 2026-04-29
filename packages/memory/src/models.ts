@@ -36,3 +36,19 @@ export interface EnvironmentProfile {
   defaultChain?: string;
   rpcOverrides: Record<string, string[]>;
 }
+
+export type AlertSeverity = "info" | "warning" | "critical";
+export type AlertType = "wallet_state_change" | "contract_event" | "policy_action";
+
+export interface AlertRecord {
+  id: string;
+  type: AlertType;
+  watcherId: string;
+  chainKey?: string;
+  address?: string;
+  message: string;
+  severity: AlertSeverity;
+  dataJson: string;
+  triggeredAt: string;
+  resolvedAt?: string;
+}
