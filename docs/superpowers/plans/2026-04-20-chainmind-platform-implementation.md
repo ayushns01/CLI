@@ -504,7 +504,7 @@ Expected: PASS
 - Create: `apps/cli/src/commands/ai.ts`
 - Test: `tests/e2e/agent-workflows.test.ts`
 
-- [ ] **Step 1: Write failing intent-to-plan tests**
+- [x] **Step 1: Write failing intent-to-plan tests**
 
 Cover:
 - deploy request
@@ -512,23 +512,23 @@ Cover:
 - contract interaction request
 - denied high-risk request
 
-- [ ] **Step 2: Write failing orchestration tests**
+- [x] **Step 2: Write failing orchestration tests**
 
 Cover:
 - multi-step plan execution order
 - observation loop after each tool
 - policy denial propagation
 
-- [ ] **Step 3: Run agent tests**
+- [x] **Step 3: Run agent tests**
 
-Run: `pnpm exec vitest run packages/agent/src/agent.test.ts tests/e2e/agent-workflows.test.ts`
-Expected: FAIL
+Run: `node --experimental-strip-types --test packages/agent/src/agent.test.ts tests/e2e/agent-workflows.test.ts`
+Expected: PASS
 
-- [ ] **Step 4: Implement a provider-agnostic LLM adapter**
+- [x] **Step 4: Implement a provider-agnostic LLM adapter**
 
 Keep prompts and model-provider code separate from deterministic tools.
 
-- [ ] **Step 5: Implement the runtime**
+- [x] **Step 5: Implement the runtime**
 
 Support:
 - intent parsing
@@ -537,9 +537,9 @@ Support:
 - approval checkpoints
 - structured summaries
 
-- [ ] **Step 6: Re-run agent tests**
+- [x] **Step 6: Re-run agent tests**
 
-Run: `pnpm exec vitest run packages/agent/src/agent.test.ts tests/e2e/agent-workflows.test.ts`
+Run: `node --experimental-strip-types --test packages/agent/src/agent.test.ts tests/e2e/agent-workflows.test.ts`
 Expected: PASS
 
 ### Task 11: Add Monitoring and Automation
