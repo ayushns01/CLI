@@ -23,6 +23,7 @@ export class AuditLogger {
     this.env = env;
   }
 
+  /** Throws if the underlying store write fails. */
   log(actorId: string, action: string, result: EvaluationResult, metadata?: Record<string, unknown>): void {
     const record: AuditRecord = {
       id: randomUUID(),

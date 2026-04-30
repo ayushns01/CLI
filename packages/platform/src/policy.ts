@@ -30,6 +30,11 @@ export class PolicyEvaluator {
   }
 
   evaluate(action: string, level: RequiredLevel): EvaluationResult {
+    // Step 0: autoApprove short-circuits all other checks
+    if (this.policy.autoApprove === true) {
+      return { allowed: true };
+    }
+
     // Step 1: check allowedActions
     if (this.policy.allowedActions && this.policy.allowedActions.length > 0) {
       if (!this.policy.allowedActions.includes(action)) {
@@ -56,6 +61,9 @@ export class PolicyEvaluator {
     // Step 5: level ordering check
     const requiredIdx = levelIndex(this.policy.requiredLevel);
     const requestedIdx = levelIndex(level);
+    if (requestedIdx === -1 || requiredIdx === -1) {
+      return { allowed: false, reason: "unknown approval level" };
+    }
     if (requiredIdx > requestedIdx) {
       return { allowed: false, reason: "insufficient approval level" };
     }

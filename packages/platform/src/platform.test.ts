@@ -102,19 +102,29 @@ test("PolicyEvaluator: toApprovalPolicy maps write to simulate and returns corre
   assert.equal(policy.denyHighRisk, false);
 });
 
+test("PolicyEvaluator: autoApprove: true bypasses level check", () => {
+  // ci env with sign level would normally be blocked, but autoApprove overrides
+  const evaluator = new PolicyEvaluator({ env: "ci", requiredLevel: "sign", autoApprove: true });
+  const result = evaluator.evaluate("sign-tx", "sign");
+  assert.equal(result.allowed, true);
+});
+
 // ── AuditLogger tests ─────────────────────────────────────────────────────────
 
-test("AuditLogger: log() stores a record retrievable via list()", () => {
+function makeLogger(env = "local") {
   const store = new SqliteWorkspaceStore(":memory:");
-  const logger = new AuditLogger(store, "local");
+  return new AuditLogger(store, env);
+}
+
+test("AuditLogger: log() stores a record retrievable via list()", () => {
+  const logger = makeLogger();
   logger.log("user1", "transfer", { allowed: true });
   const records = logger.list();
   assert.equal(records.length, 1);
 });
 
 test("AuditLogger: log() sets id as truthy string", () => {
-  const store = new SqliteWorkspaceStore(":memory:");
-  const logger = new AuditLogger(store, "local");
+  const logger = makeLogger();
   logger.log("user1", "transfer", { allowed: true });
   const records = logger.list();
   assert.ok(records[0].id);
@@ -122,8 +132,7 @@ test("AuditLogger: log() sets id as truthy string", () => {
 });
 
 test("AuditLogger: log() sets timestamp as valid ISO-8601", () => {
-  const store = new SqliteWorkspaceStore(":memory:");
-  const logger = new AuditLogger(store, "local");
+  const logger = makeLogger();
   logger.log("user1", "transfer", { allowed: true });
   const records = logger.list();
   const ts = records[0].timestamp;
@@ -132,48 +141,42 @@ test("AuditLogger: log() sets timestamp as valid ISO-8601", () => {
 });
 
 test("AuditLogger: log() sets actorId correctly", () => {
-  const store = new SqliteWorkspaceStore(":memory:");
-  const logger = new AuditLogger(store, "local");
+  const logger = makeLogger();
   logger.log("alice", "transfer", { allowed: true });
   const records = logger.list();
   assert.equal(records[0].actorId, "alice");
 });
 
 test("AuditLogger: log() sets action correctly", () => {
-  const store = new SqliteWorkspaceStore(":memory:");
-  const logger = new AuditLogger(store, "local");
+  const logger = makeLogger();
   logger.log("alice", "deploy-contract", { allowed: true });
   const records = logger.list();
   assert.equal(records[0].action, "deploy-contract");
 });
 
 test("AuditLogger: log() sets allowed: true for allowed result", () => {
-  const store = new SqliteWorkspaceStore(":memory:");
-  const logger = new AuditLogger(store, "local");
+  const logger = makeLogger();
   logger.log("alice", "transfer", { allowed: true });
   const records = logger.list();
   assert.equal(records[0].allowed, true);
 });
 
 test("AuditLogger: log() sets allowed: false for denied result", () => {
-  const store = new SqliteWorkspaceStore(":memory:");
-  const logger = new AuditLogger(store, "ci");
+  const logger = makeLogger("ci");
   logger.log("alice", "broadcast-tx", { allowed: false, reason: "level blocked in ci environment" });
   const records = logger.list();
   assert.equal(records[0].allowed, false);
 });
 
 test("AuditLogger: log() stores reason when provided", () => {
-  const store = new SqliteWorkspaceStore(":memory:");
-  const logger = new AuditLogger(store, "ci");
+  const logger = makeLogger("ci");
   logger.log("alice", "sign-tx", { allowed: false, reason: "level blocked in ci environment" });
   const records = logger.list();
   assert.equal(records[0].reason, "level blocked in ci environment");
 });
 
 test("AuditLogger: log() stores serialised metadata when provided", () => {
-  const store = new SqliteWorkspaceStore(":memory:");
-  const logger = new AuditLogger(store, "local");
+  const logger = makeLogger();
   logger.log("alice", "transfer", { allowed: true }, { chainId: 1, amount: "1.5" });
   const records = logger.list();
   const meta = JSON.parse(records[0].metadata as string) as Record<string, unknown>;
@@ -182,8 +185,7 @@ test("AuditLogger: log() stores serialised metadata when provided", () => {
 });
 
 test("AuditLogger: list() returns records newest-first", async () => {
-  const store = new SqliteWorkspaceStore(":memory:");
-  const logger = new AuditLogger(store, "local");
+  const logger = makeLogger();
   logger.log("alice", "first", { allowed: true });
   // small delay to ensure different timestamps
   await new Promise<void>((resolve) => setTimeout(resolve, 2));
@@ -194,8 +196,7 @@ test("AuditLogger: list() returns records newest-first", async () => {
 });
 
 test("AuditLogger: list({ actorId }) filters by actor", () => {
-  const store = new SqliteWorkspaceStore(":memory:");
-  const logger = new AuditLogger(store, "local");
+  const logger = makeLogger();
   logger.log("alice", "transfer", { allowed: true });
   logger.log("bob", "balance", { allowed: true });
   const records = logger.list({ actorId: "alice" });
@@ -204,8 +205,7 @@ test("AuditLogger: list({ actorId }) filters by actor", () => {
 });
 
 test("AuditLogger: list({ allowed: false }) returns only denied", () => {
-  const store = new SqliteWorkspaceStore(":memory:");
-  const logger = new AuditLogger(store, "ci");
+  const logger = makeLogger("ci");
   logger.log("alice", "balance", { allowed: true });
   logger.log("alice", "sign-tx", { allowed: false, reason: "level blocked in ci environment" });
   logger.log("bob", "broadcast-tx", { allowed: false, reason: "level blocked in ci environment" });
@@ -215,8 +215,7 @@ test("AuditLogger: list({ allowed: false }) returns only denied", () => {
 });
 
 test("AuditLogger: list({ since }) filters by timestamp", async () => {
-  const store = new SqliteWorkspaceStore(":memory:");
-  const logger = new AuditLogger(store, "local");
+  const logger = makeLogger();
   logger.log("alice", "old-action", { allowed: true });
   await new Promise<void>((resolve) => setTimeout(resolve, 2));
   const cutoff = new Date().toISOString();
@@ -228,8 +227,7 @@ test("AuditLogger: list({ since }) filters by timestamp", async () => {
 });
 
 test("AuditLogger: summary() returns correct total, allowed, denied", () => {
-  const store = new SqliteWorkspaceStore(":memory:");
-  const logger = new AuditLogger(store, "local");
+  const logger = makeLogger();
   logger.log("alice", "action1", { allowed: true });
   logger.log("alice", "action2", { allowed: true });
   logger.log("alice", "action3", { allowed: false, reason: "insufficient approval level" });
