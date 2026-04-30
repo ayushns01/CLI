@@ -2,12 +2,21 @@ import { DatabaseSync } from "node:sqlite";
 
 import type {
   AlertRecord,
+  AuditRecord,
   ContractMemoryRecord,
   EnvironmentProfile,
   RunHistoryRecord,
   WalletMemoryRecord,
   WorkspacePreferences
 } from "./models.ts";
+
+export interface AuditFilter {
+  actorId?: string;
+  env?: string;
+  allowed?: boolean;
+  action?: string;
+  since?: string;   // ISO-8601, inclusive lower bound
+}
 
 export class SqliteWorkspaceStore {
   private readonly db: DatabaseSync;
@@ -206,6 +215,60 @@ export class SqliteWorkspaceStore {
       .run(new Date().toISOString(), id);
   }
 
+  saveAuditRecord(record: AuditRecord): void {
+    this.db
+      .prepare(
+        `insert or ignore into audit (id, timestamp, actor_id, action, env, allowed, reason, metadata)
+         values (?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        record.id,
+        record.timestamp,
+        record.actorId,
+        record.action,
+        record.env,
+        record.allowed ? 1 : 0,
+        record.reason ?? null,
+        record.metadata ?? null
+      );
+  }
+
+  listAuditRecords(filter?: AuditFilter): AuditRecord[] {
+    let sql = "select id, timestamp, actor_id, action, env, allowed, reason, metadata from audit";
+    const conditions: string[] = [];
+    const params: (string | number | null)[] = [];
+
+    if (filter?.actorId !== undefined) {
+      conditions.push("actor_id = ?");
+      params.push(filter.actorId);
+    }
+    if (filter?.env !== undefined) {
+      conditions.push("env = ?");
+      params.push(filter.env);
+    }
+    if (filter?.allowed !== undefined) {
+      conditions.push("allowed = ?");
+      params.push(filter.allowed ? 1 : 0);
+    }
+    if (filter?.action !== undefined) {
+      conditions.push("action = ?");
+      params.push(filter.action);
+    }
+    if (filter?.since !== undefined) {
+      conditions.push("timestamp >= ?");
+      params.push(filter.since);
+    }
+
+    if (conditions.length > 0) {
+      sql += " where " + conditions.join(" and ");
+    }
+    sql += " order by timestamp desc";
+
+    const stmt = this.db.prepare(sql);
+    const rows = (params.length > 0 ? stmt.all(...params) : stmt.all()) as AuditRow[];
+    return rows.map(mapAudit);
+  }
+
   close(): void {
     this.db.close();
   }
@@ -262,6 +325,17 @@ export class SqliteWorkspaceStore {
         data_json text not null,
         triggered_at text not null,
         resolved_at text
+      );
+
+      create table if not exists audit (
+        id text primary key,
+        timestamp text not null,
+        actor_id text not null,
+        action text not null,
+        env text not null,
+        allowed integer not null,
+        reason text,
+        metadata text
       );
     `);
   }
@@ -368,5 +442,29 @@ function mapAlert(row: AlertRow): AlertRecord {
     dataJson: row.data_json,
     triggeredAt: row.triggered_at,
     resolvedAt: row.resolved_at ?? undefined
+  };
+}
+
+interface AuditRow {
+  id: string;
+  timestamp: string;
+  actor_id: string;
+  action: string;
+  env: string;
+  allowed: number;   // 1 or 0
+  reason: string | null;
+  metadata: string | null;
+}
+
+function mapAudit(row: AuditRow): AuditRecord {
+  return {
+    id: row.id,
+    timestamp: row.timestamp,
+    actorId: row.actor_id,
+    action: row.action,
+    env: row.env,
+    allowed: row.allowed === 1,
+    reason: row.reason ?? undefined,
+    metadata: row.metadata ?? undefined
   };
 }

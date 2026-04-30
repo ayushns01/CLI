@@ -52,3 +52,14 @@ export interface AlertRecord {
   triggeredAt: string;
   resolvedAt?: string;
 }
+
+export interface AuditRecord {
+  id: string;
+  timestamp: string;          // ISO-8601
+  actorId: string;
+  action: string;
+  env: string;
+  allowed: boolean;
+  reason?: string;
+  metadata?: string;          // JSON-serialised Record<string, unknown>
+}
