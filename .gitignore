@@ -4,3 +4,11 @@
 node_modules/
 graphify-out/
 .obsidian/
+.claude/
+CLAUDE.md
+**/CLAUDE.md
+.claude.local.json
+.claude.json
+memory/
+TASKS.md
+dashboard.html
