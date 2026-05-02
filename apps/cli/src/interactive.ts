@@ -1,5 +1,5 @@
 import { createInterface, type Interface } from "node:readline/promises";
-import { stdin, stdout } from "node:process";
+import { env, stdin, stdout } from "node:process";
 
 import type { CliResult } from "./router.ts";
 
@@ -21,23 +21,22 @@ export interface InteractiveSessionOptions {
 }
 
 const featureChoices: InteractiveChoice[] = [
-  { label: "Check balance", value: "balance" },
-  { label: "Check all testnet balances", value: "allbal" },
-  { label: "Estimate gas", value: "gas" },
-  { label: "Simulate transaction", value: "simulate" },
-  { label: "Trace transaction", value: "trace" },
-  { label: "Deploy contract", value: "deploy" },
-  { label: "Exit", value: "exit" }
+  { label: "Check balance              - Read native balance for one address", value: "balance" },
+  { label: "Check all testnet balances - Scan configured testnets", value: "allbal" },
+  { label: "Estimate gas               - Preview transaction cost", value: "gas" },
+  { label: "Simulate transaction       - Dry-run before signing", value: "simulate" },
+  { label: "Trace transaction          - Explain a transaction path", value: "trace" },
+  { label: "Deploy contract            - Broadcast bytecode after confirmation", value: "deploy" },
+  { label: "Exit                       - Close the workstation", value: "exit" }
 ];
 
 export async function runInteractiveSession(options: InteractiveSessionOptions): Promise<void> {
-  options.write("ChainMind Interactive");
-  options.write("Select a feature. Broadcast actions require explicit confirmation.");
+  renderIntro().forEach(options.write);
 
   while (true) {
     const feature = await options.prompt.select("Feature", featureChoices);
     if (feature === "exit") {
-      options.write("Goodbye.");
+      options.write(formatStatus("Session closed. No pending actions.", "muted"));
       return;
     }
 
@@ -48,10 +47,10 @@ export async function runInteractiveSession(options: InteractiveSessionOptions):
 
     const result = await options.runCommand(args);
     if (result.stdout) {
-      options.write(result.stdout);
+      options.write(renderSection("Command output", result.stdout));
     }
     if (result.stderr) {
-      options.write(result.stderr);
+      options.write(renderSection("Command error", result.stderr));
     }
   }
 }
@@ -130,7 +129,7 @@ async function buildCommandArgs(
     ]);
 
     if (confirm !== "yes") {
-      options.write("Deploy cancelled. No transaction was broadcast.");
+      options.write(formatStatus("Deploy cancelled. No transaction was broadcast.", "warning"));
       return undefined;
     }
 
@@ -182,29 +181,70 @@ class TerminalPrompt implements InteractivePrompt {
 
   async select(prompt: string, choices: InteractiveChoice[]): Promise<string> {
     while (true) {
-      stdout.write(`\n${prompt}\n`);
+      stdout.write(color(`\n${prompt}\n`, "cyan"));
       choices.forEach((choice, index) => {
-        stdout.write(`${index + 1}. ${choice.label}\n`);
+        stdout.write(`  ${color(String(index + 1).padStart(2, " "), "bold")}. ${choice.label}\n`);
       });
 
-      const answer = await this.readline.question("Select number: ");
+      const answer = await this.readline.question(color("> Select number: ", "green"));
       const selectedIndex = Number.parseInt(answer.trim(), 10) - 1;
       const selected = choices[selectedIndex];
       if (selected) {
         return selected.value;
       }
 
-      stdout.write("Invalid selection.\n");
+      stdout.write(formatStatus("Invalid selection. Choose one of the listed numbers.", "warning"));
+      stdout.write("\n");
     }
   }
 
   async input(prompt: string, options?: { defaultValue?: string; secret?: boolean }): Promise<string> {
     const suffix = options?.defaultValue ? ` (${options.defaultValue})` : "";
-    const answer = await this.readline.question(`${prompt}${suffix}: `);
+    const answer = await this.readline.question(color(`> ${prompt}${suffix}: `, "green"));
     const value = answer.trim();
     if (!value && options?.defaultValue !== undefined) {
       return options.defaultValue;
     }
     return value;
   }
+}
+
+function renderIntro(): string[] {
+  return [
+    color("+------------------------------------------------------------+", "cyan"),
+    color("| ChainMind                                                  |", "bold"),
+    color("| AI EVM Developer Workstation                              |", "bold"),
+    color("| Select a feature. Broadcast actions require confirmation. |", "muted"),
+    color("+------------------------------------------------------------+", "cyan")
+  ];
+}
+
+function renderSection(title: string, body: string): string {
+  const lines = body.trimEnd().split("\n");
+  return [
+    "",
+    color(`-- ${title} --`, title === "Command error" ? "warning" : "cyan"),
+    ...lines.map((line) => `  ${line}`)
+  ].join("\n");
+}
+
+function formatStatus(message: string, tone: "muted" | "warning"): string {
+  const marker = tone === "warning" ? "!" : "-";
+  return color(`${marker} ${message}`, tone);
+}
+
+function color(text: string, tone: "bold" | "cyan" | "green" | "muted" | "warning"): string {
+  if (env.NO_COLOR) {
+    return text;
+  }
+
+  const codes: Record<typeof tone, [number, number]> = {
+    bold: [1, 22],
+    cyan: [36, 39],
+    green: [32, 39],
+    muted: [2, 22],
+    warning: [33, 39]
+  };
+  const [open, close] = codes[tone];
+  return `\u001B[${open}m${text}\u001B[${close}m`;
 }

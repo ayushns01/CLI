@@ -18,7 +18,9 @@ test("interactive menu routes Check balance selection", async () => {
   });
 
   assert.deepEqual(calls, [["balance", "--chain", "sepolia", "--address", "0xabc"]]);
-  assert(output.some((line) => line.includes("ChainMind Interactive")));
+  assert(output.some((line) => line.includes("+------------------------------------------------------------+")));
+  assert(output.some((line) => line.includes("AI EVM Developer Workstation")));
+  assert(output.some((line) => line.includes("Command output")));
   assert(output.some((line) => line.includes("balance: 1 ETH")));
 });
 
