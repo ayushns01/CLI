@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { runInteractiveSession, type InteractivePrompt } from "./interactive.ts";
+import { runInteractiveSession, TerminalPrompt, validateAddress, type InteractivePrompt } from "./interactive.ts";
 
 test("interactive menu routes Check balance selection", async () => {
   const calls: string[][] = [];
@@ -162,6 +162,37 @@ test("interactive menu routes Deploy contract selection only after confirmation"
   ]);
 });
 
+test("TerminalPrompt input validate accepts valid address on first try", async () => {
+  const questions: string[] = [];
+  const output: string[] = [];
+  const prompt = new TerminalPrompt(mockReadline(["0x1111111111111111111111111111111111111111"], questions), {
+    write: (text) => output.push(text)
+  });
+
+  const value = await prompt.input("Address", { validate: validateAddress });
+
+  assert.equal(value, "0x1111111111111111111111111111111111111111");
+  assert.equal(questions.length, 1);
+  assert.equal(output.some((line) => line.includes("Must be a valid Ethereum address")), false);
+});
+
+test("TerminalPrompt input validate re-prompts on invalid address until valid", async () => {
+  const questions: string[] = [];
+  const output: string[] = [];
+  const prompt = new TerminalPrompt(
+    mockReadline(["0xbad", "0x2222222222222222222222222222222222222222"], questions),
+    {
+      write: (text) => output.push(text)
+    }
+  );
+
+  const value = await prompt.input("Address", { validate: validateAddress });
+
+  assert.equal(value, "0x2222222222222222222222222222222222222222");
+  assert.equal(questions.length, 2);
+  assert(output.some((line) => line.includes("Must be a valid Ethereum address")));
+});
+
 function scriptedPrompt(answers: string[]): InteractivePrompt {
   return {
     select: async () => {
@@ -175,6 +206,19 @@ function scriptedPrompt(answers: string[]): InteractivePrompt {
       const answer = answers.shift();
       if (answer === undefined) {
         throw new Error("No scripted input answer left");
+      }
+      return answer;
+    }
+  };
+}
+
+function mockReadline(answers: string[], questions: string[]) {
+  return {
+    question: async (question: string) => {
+      questions.push(question);
+      const answer = answers.shift();
+      if (answer === undefined) {
+        throw new Error("No mock answer left");
       }
       return answer;
     }
