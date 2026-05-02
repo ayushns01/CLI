@@ -5,6 +5,9 @@
  */
 
 import type { ToolDescriptor } from "./types.ts";
+import type { ChainRegistry } from "../../chains/src/index.ts";
+import { getNativeBalance, getNativeBalancesAcrossChains } from "../../tx/src/balance.ts";
+import { createViemBalanceClient } from "../../rpc/src/viem-clients.ts";
 
 /**
  * Create a tool registry.
@@ -169,6 +172,73 @@ export function createDefaultToolRegistry(): ToolRegistry {
     isHighRisk: true,
     execute: async (args) => {
       throw new Error("force_withdraw is not allowed");
+    }
+  });
+
+  return registry;
+}
+
+/**
+ * Build a tool registry whose `balance` and `balances_multi` tools hit real
+ * RPC endpoints via viem. Other tools fall through to the placeholder
+ * implementations from createDefaultToolRegistry until their own real impls
+ * land.
+ */
+export function createRealToolRegistry(deps: { chainRegistry: ChainRegistry }): ToolRegistry {
+  const registry = createDefaultToolRegistry();
+  const { chainRegistry } = deps;
+
+  registry.register({
+    name: "balance",
+    description: "Get native balance for an address on a chain",
+    approvalLevel: "read",
+    isHighRisk: false,
+    execute: async (args) => {
+      const chainKey = String(args.chainKey);
+      const address = String(args.address);
+      const chain = chainRegistry.getByName(chainKey);
+      const result = await getNativeBalance({
+        chainKey: chain.key,
+        address,
+        symbol: chain.nativeCurrency.symbol,
+        decimals: chain.nativeCurrency.decimals,
+        client: createViemBalanceClient({ rpcUrl: chain.rpcUrls[0] })
+      });
+      return {
+        chainKey: result.chainKey,
+        address: result.address,
+        balance: result.balanceWei.toString(),
+        formatted: result.formatted
+      };
+    }
+  });
+
+  registry.register({
+    name: "balances_multi",
+    description: "Get native balance for an address across multiple chains",
+    approvalLevel: "read",
+    isHighRisk: false,
+    execute: async (args) => {
+      const address = String(args.address);
+      const chainKeys = Array.isArray(args.chainKeys)
+        ? (args.chainKeys as string[])
+        : chainRegistry.all().map((c) => c.key);
+      const chains = chainKeys.map((key) => {
+        const chain = chainRegistry.getByName(key);
+        return { key: chain.key, symbol: chain.nativeCurrency.symbol, decimals: chain.nativeCurrency.decimals };
+      });
+      const results = await getNativeBalancesAcrossChains({
+        address,
+        chains,
+        createClient: (chainKey: string) => {
+          const chain = chainRegistry.getByName(chainKey);
+          return createViemBalanceClient({ rpcUrl: chain.rpcUrls[0] });
+        }
+      });
+      return {
+        address,
+        balances: results.map((r) => ({ chainKey: r.chainKey, balance: r.balanceWei.toString(), formatted: r.formatted }))
+      };
     }
   });
 

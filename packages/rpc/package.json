@@ -2,5 +2,8 @@
   "name": "@chainmind/rpc",
   "version": "0.1.0",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "viem": "^2.48.8"
+  }
 }
