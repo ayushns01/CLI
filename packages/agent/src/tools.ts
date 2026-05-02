@@ -10,6 +10,8 @@ import { getNativeBalance, getNativeBalancesAcrossChains } from "../../tx/src/ba
 import { simulateTransaction } from "../../tx/src/simulate.ts";
 import { estimateGasCost } from "../../tx/src/gas.ts";
 import { fetchTransactionTrace, buildTraceReport } from "../../debug/src/trace.ts";
+import { startFork, type ForkSession } from "../../debug/src/fork.ts";
+import { AnvilForkRunner } from "../../debug/src/anvil-runner.ts";
 import {
   createViemBalanceClient,
   createViemContractClient,
@@ -165,6 +167,16 @@ export function createDefaultToolRegistry(): ToolRegistry {
     }
   });
 
+  registry.register({
+    name: "fork_stop",
+    description: "Stop a local fork session",
+    approvalLevel: "read",
+    isHighRisk: false,
+    execute: async (args) => {
+      throw new Error("fork_stop is only available in the real tool registry");
+    }
+  });
+
   // High-risk operations (typically denied in production)
   registry.register({
     name: "drain_balance",
@@ -198,6 +210,8 @@ export function createDefaultToolRegistry(): ToolRegistry {
 export function createRealToolRegistry(deps: { chainRegistry: ChainRegistry }): ToolRegistry {
   const registry = createDefaultToolRegistry();
   const { chainRegistry } = deps;
+  const forkRunner = new AnvilForkRunner();
+  const forkSessions = new Map<string, ForkSession>();
 
   registry.register({
     name: "balance",
@@ -442,6 +456,54 @@ export function createRealToolRegistry(deps: { chainRegistry: ChainRegistry }): 
     }
   });
 
+  registry.register({
+    name: "fork_chain",
+    description: "Create a local Anvil fork of a chain",
+    approvalLevel: "read",
+    isHighRisk: false,
+    execute: async (args) => {
+      const chainKey = requireStringArg(args, "chainKey", "fork_chain");
+      const chain = chainRegistry.getByName(chainKey);
+      const port = parsePortArg(args.port);
+      const blockNumber = parseOptionalBigIntArg(args.blockNumber, "blockNumber", "fork_chain");
+      const session = await startFork({
+        chainKey: chain.key,
+        rpcUrl: chain.rpcUrls[0],
+        blockNumber,
+        port,
+        runner: forkRunner
+      });
+      forkSessions.set(session.id, session);
+      return {
+        forkId: session.id,
+        forkRpcUrl: session.rpcUrl,
+        port: session.port,
+        chainKey: session.chainKey,
+        blockNumber: session.blockNumber?.toString()
+      };
+    }
+  });
+
+  registry.register({
+    name: "fork_stop",
+    description: "Stop a local Anvil fork session",
+    approvalLevel: "read",
+    isHighRisk: false,
+    execute: async (args) => {
+      const forkId = requireStringArg(args, "forkId", "fork_stop");
+      const session = forkSessions.get(forkId);
+      if (!session) {
+        throw new Error(`Unknown fork session: ${forkId}`);
+      }
+      try {
+        await session.stop();
+      } finally {
+        forkSessions.delete(forkId);
+      }
+      return { forkId, stopped: true };
+    }
+  });
+
   return registry;
 }
 
@@ -475,6 +537,33 @@ function requireHexArg(
     throw new Error(`${toolName} requires ${name} to be hex`);
   }
   return value as `0x${string}`;
+}
+
+function parsePortArg(value: unknown): number {
+  if (value === undefined) {
+    return 8545;
+  }
+  const port = typeof value === "number" ? value : Number.parseInt(String(value), 10);
+  if (!Number.isInteger(port) || port <= 0 || port > 65_535) {
+    throw new Error("fork_chain requires port to be an integer between 1 and 65535");
+  }
+  return port;
+}
+
+function parseOptionalBigIntArg(value: unknown, name: string, toolName: string): bigint | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value === "bigint") {
+    return value;
+  }
+  if (typeof value === "number" && Number.isInteger(value)) {
+    return BigInt(value);
+  }
+  if (typeof value === "string" && /^\d+$/.test(value.trim())) {
+    return BigInt(value.trim());
+  }
+  throw new Error(`${toolName} requires ${name} to be an integer`);
 }
 
 function parseAbiArg(value: unknown): unknown[] {
