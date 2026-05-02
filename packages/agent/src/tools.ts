@@ -7,7 +7,8 @@
 import type { ToolDescriptor } from "./types.ts";
 import type { ChainRegistry } from "../../chains/src/index.ts";
 import { getNativeBalance, getNativeBalancesAcrossChains } from "../../tx/src/balance.ts";
-import { createViemBalanceClient } from "../../rpc/src/viem-clients.ts";
+import { simulateTransaction } from "../../tx/src/simulate.ts";
+import { createViemBalanceClient, createViemSimulationClient } from "../../rpc/src/viem-clients.ts";
 
 /**
  * Create a tool registry.
@@ -238,6 +239,44 @@ export function createRealToolRegistry(deps: { chainRegistry: ChainRegistry }): 
       return {
         address,
         balances: results.map((r) => ({ chainKey: r.chainKey, balance: r.balanceWei.toString(), formatted: r.formatted }))
+      };
+    }
+  });
+
+  registry.register({
+    name: "simulate_tx",
+    description: "Simulate a transaction before broadcasting (real RPC eth_call + eth_estimateGas)",
+    approvalLevel: "simulate",
+    isHighRisk: false,
+    execute: async (args) => {
+      const chainKey = String(args.chainKey);
+      const chain = chainRegistry.getByName(chainKey);
+      const request = {
+        chainKey: chain.key,
+        from: String(args.from),
+        to: String(args.to),
+        data: typeof args.data === "string" ? args.data : "0x",
+        valueWei: typeof args.valueWei === "bigint"
+          ? args.valueWei
+          : BigInt(args.valueWei !== undefined ? String(args.valueWei) : "0")
+      };
+      const result = await simulateTransaction({
+        request,
+        client: createViemSimulationClient({ rpcUrl: chain.rpcUrls[0] })
+      });
+      if (result.success) {
+        return {
+          success: true,
+          chainKey: chain.key,
+          gasUsed: result.gasUsed.toString(),
+          stateChanges: result.stateChanges
+        };
+      }
+      return {
+        success: false,
+        chainKey: chain.key,
+        revertReason: result.revertReason,
+        revertData: result.revertData
       };
     }
   });
