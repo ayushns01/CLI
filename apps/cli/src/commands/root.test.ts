@@ -23,6 +23,8 @@ test("renderRootHelp lists currently wired terminal commands", () => {
   assert.match(help, /gas estimate/);
   assert.match(help, /trace --chain/);
   assert.match(help, /deploy --chain/);
+  assert.match(help, /interactive/);
+  assert.match(help, /menu/);
 });
 
 test("renderRootHelp documents workspace config support", () => {

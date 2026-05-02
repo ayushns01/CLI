@@ -14,7 +14,9 @@ const wiredCommands = [
   "gas estimate --chain <chain> --from <address> --to <address> [--data 0x] [--value-wei 0]",
   "simulate --chain <chain> --from <address> --to <address> [--data 0x] [--value-wei 0]",
   "trace --chain <chain> --tx <txHash>",
-  "deploy --chain <chain> --bytecode <hex> --private-key <hex> --confirm-broadcast"
+  "deploy --chain <chain> --bytecode <hex> --private-key <hex> --confirm-broadcast",
+  "interactive",
+  "menu"
 ];
 
 export function renderRootHelp(): string {
