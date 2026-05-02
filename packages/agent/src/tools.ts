@@ -12,11 +12,13 @@ import { estimateGasCost } from "../../tx/src/gas.ts";
 import { fetchTransactionTrace, buildTraceReport } from "../../debug/src/trace.ts";
 import {
   createViemBalanceClient,
+  createViemContractClient,
   createViemDeployClient,
   createViemGasClient,
   createViemSimulationClient,
   createViemTraceClient
 } from "../../rpc/src/viem-clients.ts";
+import { listContractFunctions } from "../../contracts/src/studio.ts";
 
 /**
  * Create a tool registry.
@@ -359,6 +361,60 @@ export function createRealToolRegistry(deps: { chainRegistry: ChainRegistry }): 
   });
 
   registry.register({
+    name: "interact_contract",
+    description: "Call a contract function (real RPC read/write)",
+    approvalLevel: "broadcast",
+    isHighRisk: false,
+    execute: async (args) => {
+      const chainKey = requireStringArg(args, "chainKey", "interact_contract");
+      const address = requireStringArg(args, "address", "interact_contract");
+      const functionName = requireStringArg(args, "functionName", "interact_contract");
+      const chain = chainRegistry.getByName(chainKey);
+      const abi = parseAbiArg(args.abi);
+      const functions = listContractFunctions(abi);
+      const selectedFunction = functions.find((entry) => entry.name === functionName);
+      if (!selectedFunction) {
+        throw new Error(`Function ${functionName} not found in ABI`);
+      }
+      const rawArgs = Array.isArray(args.args) ? args.args : [];
+      const client = createViemContractClient({ rpcUrl: chain.rpcUrls[0] });
+
+      if (selectedFunction.kind === "read") {
+        const result = await client.read({
+          address,
+          abi,
+          functionName,
+          args: rawArgs
+        });
+        return {
+          chainKey: chain.key,
+          address,
+          functionName,
+          result: serializeResult(result.result)
+        };
+      }
+
+      const privateKey = requireStringArg(args, "privateKey", "interact_contract");
+      const valueWei = typeof args.valueWei === "bigint"
+        ? args.valueWei
+        : args.valueWei !== undefined ? BigInt(String(args.valueWei)) : undefined;
+      const result = await client.write({
+        address,
+        abi,
+        functionName,
+        args: rawArgs,
+        privateKey,
+        valueWei
+      });
+      return {
+        chainKey: chain.key,
+        txHash: result.transactionHash,
+        blockNumber: result.blockNumber.toString()
+      };
+    }
+  });
+
+  registry.register({
     name: "deploy_contract",
     description: "Deploy a contract from bytecode (real RPC sign + broadcast). Requires privateKey arg.",
     approvalLevel: "broadcast",
@@ -419,4 +475,32 @@ function requireHexArg(
     throw new Error(`${toolName} requires ${name} to be hex`);
   }
   return value as `0x${string}`;
+}
+
+function parseAbiArg(value: unknown): unknown[] {
+  if (Array.isArray(value)) {
+    return value;
+  }
+  if (typeof value === "string" && value.trim()) {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) {
+      return parsed;
+    }
+  }
+  throw new Error("interact_contract requires an abi array or JSON string");
+}
+
+function serializeResult(value: unknown): unknown {
+  if (typeof value === "bigint") {
+    return value.toString();
+  }
+  if (Array.isArray(value)) {
+    return value.map(serializeResult);
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [key, serializeResult(entry)])
+    );
+  }
+  return value;
 }

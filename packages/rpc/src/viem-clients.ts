@@ -10,7 +10,7 @@
 
 import { createPublicClient, createWalletClient, http, BaseError, ContractFunctionRevertedError } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import type { Address, Hex } from "viem";
+import type { Abi, Address, Hex } from "viem";
 
 export interface BalanceClient {
   getBalance(address: string): Promise<bigint>;
@@ -218,6 +218,37 @@ export interface DeployClient {
   deploy(request: DeployRequest): Promise<DeployResult>;
 }
 
+export interface AbiInput {
+  name?: string;
+  type: string;
+}
+
+export interface ContractReadRequest {
+  address: string;
+  abi: unknown[];
+  functionName: string;
+  args?: unknown[];
+}
+
+export interface ContractWriteRequest extends ContractReadRequest {
+  privateKey: string;
+  valueWei?: bigint;
+}
+
+export interface ContractReadResult {
+  result: unknown;
+}
+
+export interface ContractWriteResult {
+  transactionHash: string;
+  blockNumber: bigint;
+}
+
+export interface ContractClient {
+  read(request: ContractReadRequest): Promise<ContractReadResult>;
+  write(request: ContractWriteRequest): Promise<ContractWriteResult>;
+}
+
 export interface ViemDeployClientOptions extends ViemClientOptions {
   privateKey: string;   // hex-encoded, with or without 0x prefix
 }
@@ -259,6 +290,106 @@ export function createViemDeployClient(options: ViemDeployClientOptions): Deploy
       };
     }
   };
+}
+
+export function createViemContractClient(options: ViemClientOptions): ContractClient {
+  const transport = http(options.rpcUrl, { timeout: options.timeoutMs ?? 30_000 });
+  const publicClient = createPublicClient({ transport });
+
+  return {
+    async read(request: ContractReadRequest): Promise<ContractReadResult> {
+      const fragment = findAbiFunction(request.abi, request.functionName);
+      const args = coerceArgs(fragment.inputs ?? [], request.args ?? []);
+      const result = await publicClient.readContract({
+        address: request.address as Address,
+        abi: request.abi as Abi,
+        functionName: request.functionName,
+        args
+      });
+      return { result };
+    },
+
+    async write(request: ContractWriteRequest): Promise<ContractWriteResult> {
+      const fragment = findAbiFunction(request.abi, request.functionName);
+      const args = coerceArgs(fragment.inputs ?? [], request.args ?? []);
+      const account = privateKeyToAccount(normalizePrivateKey(request.privateKey));
+      const wallet = createWalletClient({ account, transport });
+      const transactionHash = await wallet.writeContract({
+        account,
+        address: request.address as Address,
+        abi: request.abi as Abi,
+        functionName: request.functionName,
+        args,
+        chain: null,
+        value: request.valueWei
+      });
+      const receipt = await publicClient.waitForTransactionReceipt({ hash: transactionHash });
+      return {
+        transactionHash: receipt.transactionHash,
+        blockNumber: receipt.blockNumber
+      };
+    }
+  };
+}
+
+export function coerceArgs(inputs: AbiInput[], rawArgs: unknown[]): unknown[] {
+  if (inputs.length !== rawArgs.length) {
+    throw new Error(`Function expects ${inputs.length} arguments, received ${rawArgs.length}`);
+  }
+
+  return inputs.map((input, index) => coerceArg(input.type, rawArgs[index]));
+}
+
+function coerceArg(type: string, value: unknown): unknown {
+  if (/^u?int([0-9]*)?$/.test(type)) {
+    if (typeof value === "bigint") {
+      return value;
+    }
+    if (typeof value === "number" && Number.isInteger(value)) {
+      return BigInt(value);
+    }
+    if (typeof value === "string" && /^-?\d+$/.test(value.trim())) {
+      return BigInt(value.trim());
+    }
+    throw new Error(`Invalid ${type} argument: ${String(value)}`);
+  }
+
+  if (type === "bool") {
+    if (typeof value === "boolean") {
+      return value;
+    }
+    if (typeof value === "string") {
+      const normalized = value.trim().toLowerCase();
+      if (normalized === "true") return true;
+      if (normalized === "false") return false;
+    }
+    throw new Error(`Invalid bool argument: ${String(value)}`);
+  }
+
+  return value;
+}
+
+function findAbiFunction(abi: unknown[], functionName: string): { inputs?: AbiInput[] } {
+  const fragment = abi.find((entry) => {
+    if (!entry || typeof entry !== "object") {
+      return false;
+    }
+    const candidate = entry as { type?: unknown; name?: unknown };
+    return candidate.type === "function" && candidate.name === functionName;
+  });
+
+  if (!fragment || typeof fragment !== "object") {
+    throw new Error(`Function ${functionName} not found in ABI`);
+  }
+
+  const inputs = (fragment as { inputs?: unknown }).inputs;
+  return {
+    inputs: Array.isArray(inputs) ? inputs.filter(isAbiInput) : []
+  };
+}
+
+function isAbiInput(value: unknown): value is AbiInput {
+  return Boolean(value && typeof value === "object" && typeof (value as { type?: unknown }).type === "string");
 }
 
 function normalizePrivateKey(value: string): Hex {
