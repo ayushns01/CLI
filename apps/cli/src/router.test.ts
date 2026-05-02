@@ -161,6 +161,63 @@ test("runCli routes confirmed deploy to deploy_contract", async () => {
   ]);
 });
 
+test("runCli routes deploy --artifact to deploy_contract with artifact bytecode and contract name", async () => {
+  const calls: ToolCall[] = [];
+  const artifactPath = writeTempArtifact("Token", "0x60006000");
+  const result = await runCli(
+    [
+      "deploy",
+      "--chain",
+      "sepolia",
+      "--artifact",
+      artifactPath,
+      "--private-key",
+      "0x1111111111111111111111111111111111111111111111111111111111111111",
+      "--confirm-broadcast"
+    ],
+    fakeDeps(calls, {
+      deploy_contract: {
+        chainKey: "sepolia",
+        contractAddress: "0x2222222222222222222222222222222222222222",
+        transactionHash: "0x3333333333333333333333333333333333333333333333333333333333333333",
+        blockNumber: "123"
+      }
+    })
+  );
+
+  assert.equal(result.exitCode, 0);
+  assert.match(result.stdout, /contract: Token/);
+  assert.deepEqual(calls, [
+    {
+      name: "deploy_contract",
+      args: {
+        chainKey: "sepolia",
+        bytecode: "0x60006000",
+        privateKey: "0x1111111111111111111111111111111111111111111111111111111111111111"
+      }
+    }
+  ]);
+});
+
+test("runCli deploy fails when neither --bytecode nor --artifact is provided", async () => {
+  const calls: ToolCall[] = [];
+  const result = await runCli(
+    [
+      "deploy",
+      "--chain",
+      "sepolia",
+      "--private-key",
+      "0x1111111111111111111111111111111111111111111111111111111111111111",
+      "--confirm-broadcast"
+    ],
+    fakeDeps(calls)
+  );
+
+  assert.equal(result.exitCode, 1);
+  assert.match(result.stderr, /Missing deploy input: provide --bytecode or --artifact/);
+  assert.deepEqual(calls, []);
+});
+
 test("runCli allbal --testnet selects only testnet chains", async () => {
   const calls: ToolCall[] = [];
   const result = await runCli(
@@ -277,4 +334,18 @@ function fakeDeps(calls: ToolCall[], responses: Record<string, unknown> = {}) {
       ]
     }
   };
+}
+
+function writeTempArtifact(contractName: string, bytecode: string): string {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "chainmind-artifact-"));
+  const artifactPath = path.join(dir, `${contractName}.json`);
+  writeFileSync(
+    artifactPath,
+    JSON.stringify({
+      contractName,
+      abi: [],
+      bytecode
+    })
+  );
+  return artifactPath;
 }

@@ -14,6 +14,7 @@ import { renderAllBalancesResult } from "./commands/allbal.ts";
 import { renderGasEstimateResult } from "./commands/gas/estimate.ts";
 import { renderTraceReport } from "./commands/trace.ts";
 import { renderDeploymentRecord } from "./commands/contract/deploy.ts";
+import { readArtifactFile } from "./artifact-reader.ts";
 
 export interface CliResult {
   stdout: string;
@@ -120,13 +121,14 @@ export async function runCli(
       if (!options["confirm-broadcast"]) {
         return fail("deploy_contract requires --confirm-broadcast because it signs and broadcasts a real transaction");
       }
+      const deployInput = await resolveDeployInput(options);
       const result = await deps.toolRegistry.executeTool("deploy_contract", {
         chainKey: requiredOption(options, "chain"),
-        bytecode: requiredOption(options, "bytecode"),
+        bytecode: deployInput.bytecode,
         privateKey: requiredOption(options, "private-key"),
         ...(options["value-wei"] ? { valueWei: options["value-wei"] } : {})
       });
-      return ok(renderDeployToolResult(result, options.name ?? "Contract"));
+      return ok(renderDeployToolResult(result, deployInput.contractName));
     }
 
     return fail(`Command '${args.join(" ")}' is not implemented yet.`);
@@ -221,6 +223,28 @@ function parseCsvOption(value: string | true | undefined): string[] {
   return typeof value === "string"
     ? value.split(",").map((entry) => entry.trim()).filter(Boolean)
     : [];
+}
+
+async function resolveDeployInput(options: Record<string, string | true>): Promise<{
+  bytecode: string;
+  contractName: string;
+}> {
+  if (typeof options.artifact === "string" && options.artifact.trim() !== "") {
+    const artifact = await readArtifactFile(options.artifact);
+    return {
+      bytecode: artifact.bytecode,
+      contractName: artifact.contractName
+    };
+  }
+
+  if (typeof options.bytecode === "string" && options.bytecode.trim() !== "") {
+    return {
+      bytecode: options.bytecode,
+      contractName: "Contract"
+    };
+  }
+
+  throw new Error("Missing deploy input: provide --bytecode or --artifact");
 }
 
 function renderBalanceToolResult(result: unknown): string {

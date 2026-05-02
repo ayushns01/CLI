@@ -2,6 +2,7 @@ import { createInterface, type Interface } from "node:readline/promises";
 import { env, exit, stdin, stdout } from "node:process";
 
 import type { CliResult } from "./router.ts";
+import { readArtifactFile } from "./artifact-reader.ts";
 
 export interface InteractiveChoice {
   label: string;
@@ -130,7 +131,7 @@ async function buildCommandArgs(
 
   if (feature === "deploy") {
     const chain = await selectChain(options);
-    const bytecode = await options.prompt.input("Bytecode", { validate: validateHex });
+    const deployInput = await collectDeployInput(options);
     const privateKey = await options.prompt.input("Private key", { secret: true, validate: validateHex });
     const confirm = await options.prompt.select("Broadcast real transaction?", [
       { label: "No, cancel", value: "no" },
@@ -146,8 +147,8 @@ async function buildCommandArgs(
       "deploy",
       "--chain",
       chain,
-      "--bytecode",
-      bytecode,
+      deployInput.flag,
+      deployInput.value,
       "--private-key",
       privateKey,
       "--confirm-broadcast"
@@ -172,6 +173,36 @@ async function collectTransactionInput(options: InteractiveSessionOptions): Prom
     data: await options.prompt.input("Calldata", { defaultValue: "0x", validate: validateHex }),
     valueWei: await options.prompt.input("Value wei", { defaultValue: "0" })
   };
+}
+
+async function collectDeployInput(options: InteractiveSessionOptions): Promise<{
+  flag: "--artifact" | "--bytecode";
+  value: string;
+}> {
+  while (true) {
+    const value = await options.prompt.input("Artifact path or bytecode (0x...)");
+    if (value.startsWith("0x")) {
+      const error = validateHex(value);
+      if (error) {
+        options.write(formatStatus(error, "warning"));
+        continue;
+      }
+      return { flag: "--bytecode", value };
+    }
+
+    try {
+      const artifact = await readArtifactFile(value);
+      options.write(formatStatus(`Loaded ${artifact.contractName} (${byteLength(artifact.bytecode)} bytes)`, "success"));
+      return { flag: "--artifact", value };
+    } catch (err) {
+      options.write(formatStatus(err instanceof Error ? err.message : String(err), "warning"));
+    }
+  }
+}
+
+function byteLength(hex: string): string {
+  const bytes = hex.startsWith("0x") ? (hex.length - 2) / 2 : hex.length / 2;
+  return new Intl.NumberFormat("en-US").format(bytes);
 }
 
 async function selectChain(options: InteractiveSessionOptions): Promise<string> {
@@ -360,12 +391,12 @@ function renderSection(title: string, body: string): string {
   ].join("\n");
 }
 
-function formatStatus(message: string, tone: "muted" | "warning"): string {
-  const marker = tone === "warning" ? "!" : "-";
+function formatStatus(message: string, tone: "muted" | "warning" | "success"): string {
+  const marker = tone === "warning" ? "!" : tone === "success" ? "✓" : "-";
   return color(`${marker} ${message}`, tone);
 }
 
-function color(text: string, tone: "bold" | "cyan" | "green" | "muted" | "warning"): string {
+function color(text: string, tone: "bold" | "cyan" | "green" | "muted" | "warning" | "success"): string {
   if (env.NO_COLOR) {
     return text;
   }
@@ -375,7 +406,8 @@ function color(text: string, tone: "bold" | "cyan" | "green" | "muted" | "warnin
     cyan: [36, 39],
     green: [32, 39],
     muted: [2, 22],
-    warning: [33, 39]
+    warning: [33, 39],
+    success: [32, 39]
   };
   const [open, close] = codes[tone];
   return `\u001B[${open}m${text}\u001B[${close}m`;

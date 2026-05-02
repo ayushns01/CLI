@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import os from "node:os";
+import path from "node:path";
+import { mkdtempSync, writeFileSync } from "node:fs";
 
 import { runInteractiveSession, TerminalPrompt, validateAddress, type InteractivePrompt } from "./interactive.ts";
 
@@ -135,7 +138,7 @@ test("interactive menu cancels Deploy contract when user does not confirm broadc
   assert(output.some((line) => line.includes("Deploy cancelled")));
 });
 
-test("interactive menu routes Deploy contract selection only after confirmation", async () => {
+test("interactive menu routes Deploy contract bytecode selection only after confirmation", async () => {
   const calls: string[][] = [];
 
   await runInteractiveSession({
@@ -160,6 +163,36 @@ test("interactive menu routes Deploy contract selection only after confirmation"
       "--confirm-broadcast"
     ]
   ]);
+});
+
+test("interactive menu routes Deploy contract artifact path selection only after confirmation", async () => {
+  const calls: string[][] = [];
+  const output: string[] = [];
+  const artifactPath = writeTempArtifact("Token", "0x60006000f3");
+
+  await runInteractiveSession({
+    prompt: scriptedPrompt(["deploy", "sepolia", artifactPath, "0xkey", "yes", "exit"]),
+    write: (line) => output.push(line),
+    runCommand: async (args) => {
+      calls.push(args);
+      return { stdout: "deployed", stderr: "", exitCode: 0 };
+    },
+    chainKeys: ["sepolia"]
+  });
+
+  assert.deepEqual(calls, [
+    [
+      "deploy",
+      "--chain",
+      "sepolia",
+      "--artifact",
+      artifactPath,
+      "--private-key",
+      "0xkey",
+      "--confirm-broadcast"
+    ]
+  ]);
+  assert(output.some((line) => line.includes("Loaded Token")));
 });
 
 test("TerminalPrompt input validate accepts valid address on first try", async () => {
@@ -223,4 +256,18 @@ function mockReadline(answers: string[], questions: string[]) {
       return answer;
     }
   };
+}
+
+function writeTempArtifact(contractName: string, bytecode: string): string {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "chainmind-interactive-artifact-"));
+  const artifactPath = path.join(dir, `${contractName}.json`);
+  writeFileSync(
+    artifactPath,
+    JSON.stringify({
+      contractName,
+      abi: [],
+      bytecode
+    })
+  );
+  return artifactPath;
 }
