@@ -9,7 +9,14 @@ import type { ChainRegistry } from "../../chains/src/index.ts";
 import { getNativeBalance, getNativeBalancesAcrossChains } from "../../tx/src/balance.ts";
 import { simulateTransaction } from "../../tx/src/simulate.ts";
 import { estimateGasCost } from "../../tx/src/gas.ts";
-import { createViemBalanceClient, createViemGasClient, createViemSimulationClient } from "../../rpc/src/viem-clients.ts";
+import { fetchTransactionTrace, buildTraceReport } from "../../debug/src/trace.ts";
+import {
+  createViemBalanceClient,
+  createViemDeployClient,
+  createViemGasClient,
+  createViemSimulationClient,
+  createViemTraceClient
+} from "../../rpc/src/viem-clients.ts";
 
 /**
  * Create a tool registry.
@@ -317,5 +324,99 @@ export function createRealToolRegistry(deps: { chainRegistry: ChainRegistry }): 
     }
   });
 
+  registry.register({
+    name: "trace_tx",
+    description: "Get transaction trace and execution details (real RPC, receipt-based)",
+    approvalLevel: "read",
+    isHighRisk: false,
+    execute: async (args) => {
+      const chainKey = requireStringArg(args, "chainKey", "trace_tx");
+      const chain = chainRegistry.getByName(chainKey);
+      const txHash = requireHexArg(args, "txHash", "trace_tx");
+      const trace = await fetchTransactionTrace({
+        chainKey: chain.key,
+        txHash,
+        client: createViemTraceClient({ rpcUrl: chain.rpcUrls[0] })
+      });
+      const report = buildTraceReport(trace);
+      return {
+        chainKey: report.chainKey,
+        txHash: report.txHash,
+        callStack: report.callStack.map((frame) => ({
+          depth: frame.depth,
+          type: frame.type,
+          from: frame.from,
+          to: frame.to,
+          input: frame.input,
+          decodedCall: frame.decodedCall,
+          valueWei: frame.valueWei?.toString(),
+          gasUsed: frame.gasUsed?.toString(),
+          error: frame.error,
+          revertData: frame.revertData
+        }))
+      };
+    }
+  });
+
+  registry.register({
+    name: "deploy_contract",
+    description: "Deploy a contract from bytecode (real RPC sign + broadcast). Requires privateKey arg.",
+    approvalLevel: "broadcast",
+    isHighRisk: false,
+    execute: async (args) => {
+      const chainKey = requireStringArg(args, "chainKey", "deploy_contract");
+      const chain = chainRegistry.getByName(chainKey);
+      const privateKey = requireStringArg(args, "privateKey", "deploy_contract");
+      const bytecode = requireHexArg(args, "bytecode", "deploy_contract", {
+        allowEmptyHex: false,
+        emptyMessage: "deploy_contract requires non-empty bytecode"
+      });
+      const valueWei = typeof args.valueWei === "bigint"
+        ? args.valueWei
+        : args.valueWei !== undefined ? BigInt(String(args.valueWei)) : undefined;
+
+      const deployClient = createViemDeployClient({ rpcUrl: chain.rpcUrls[0], privateKey });
+      const result = await deployClient.deploy({ bytecode, valueWei });
+      return {
+        chainKey: chain.key,
+        contractAddress: result.contractAddress,
+        transactionHash: result.transactionHash,
+        blockNumber: result.blockNumber.toString()
+      };
+    }
+  });
+
   return registry;
+}
+
+function requireStringArg(
+  args: Record<string, unknown>,
+  name: string,
+  toolName: string
+): string {
+  const value = args[name];
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new Error(`${toolName} requires a ${name} arg`);
+  }
+  return value.trim();
+}
+
+function requireHexArg(
+  args: Record<string, unknown>,
+  name: string,
+  toolName: string,
+  options?: { allowEmptyHex?: boolean; emptyMessage?: string }
+): `0x${string}` {
+  const raw = args[name];
+  if (
+    options?.allowEmptyHex === false &&
+    (typeof raw !== "string" || raw.trim() === "" || raw.trim() === "0x")
+  ) {
+    throw new Error(options.emptyMessage ?? `${toolName} requires non-empty ${name}`);
+  }
+  const value = requireStringArg(args, name, toolName);
+  if (!/^0x[0-9a-fA-F]*$/.test(value)) {
+    throw new Error(`${toolName} requires ${name} to be hex`);
+  }
+  return value as `0x${string}`;
 }

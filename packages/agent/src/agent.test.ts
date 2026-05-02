@@ -3,9 +3,10 @@ import assert from "node:assert/strict";
 
 import { MockProvider } from "./provider.ts";
 import { Planner } from "./planner.ts";
-import { createDefaultToolRegistry } from "./tools.ts";
+import { createDefaultToolRegistry, createRealToolRegistry } from "./tools.ts";
 import { AgentRuntime } from "./runtime.ts";
 import type { Intent, ApprovalPolicy } from "./types.ts";
+import { createChainRegistry, loadBuiltInChains } from "../../chains/src/index.ts";
 
 test("Planner: deploy intent generates deploy step", async () => {
   const provider = new MockProvider();
@@ -359,4 +360,47 @@ test("Runtime: handles invalid tool names gracefully", async () => {
   // Should capture error
   assert(summary.observations.length > 0);
   assert(!summary.observations[0].success);
+});
+
+test("Real tools: trace_tx requires a txHash before touching RPC", async () => {
+  const registry = createRealToolRegistry({
+    chainRegistry: createChainRegistry(loadBuiltInChains())
+  });
+  const tool = registry.getTool("trace_tx");
+  assert.ok(tool);
+
+  await assert.rejects(
+    () => tool.execute({ chainKey: "sepolia" }),
+    /trace_tx requires a txHash arg/
+  );
+});
+
+test("Real tools: deploy_contract requires privateKey before broadcast", async () => {
+  const registry = createRealToolRegistry({
+    chainRegistry: createChainRegistry(loadBuiltInChains())
+  });
+  const tool = registry.getTool("deploy_contract");
+  assert.ok(tool);
+
+  await assert.rejects(
+    () => tool.execute({ chainKey: "sepolia", bytecode: "0x60006000" }),
+    /deploy_contract requires a privateKey arg/
+  );
+});
+
+test("Real tools: deploy_contract requires non-empty bytecode before broadcast", async () => {
+  const registry = createRealToolRegistry({
+    chainRegistry: createChainRegistry(loadBuiltInChains())
+  });
+  const tool = registry.getTool("deploy_contract");
+  assert.ok(tool);
+
+  await assert.rejects(
+    () =>
+      tool.execute({
+        chainKey: "sepolia",
+        privateKey: "0x1111111111111111111111111111111111111111111111111111111111111111"
+      }),
+    /deploy_contract requires non-empty bytecode/
+  );
 });

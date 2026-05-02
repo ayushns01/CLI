@@ -1,15 +1,16 @@
-import { renderRootHelp } from "./commands/root.ts";
+import { runCli } from "./router.ts";
 
-function main(args: string[]): void {
-  if (args.includes("--help") || args.includes("-h") || args.length === 0) {
-    console.log(renderRootHelp());
-    return;
+async function main(args: string[]): Promise<void> {
+  const result = await runCli(args);
+
+  if (result.stdout) {
+    console.log(result.stdout);
+  }
+  if (result.stderr) {
+    console.error(result.stderr);
   }
 
-  const [command] = args;
-
-  console.error(`Command group '${command}' is not implemented yet.`);
-  process.exitCode = 1;
+  process.exitCode = result.exitCode;
 }
 
-main(process.argv.slice(2));
+await main(process.argv.slice(2));

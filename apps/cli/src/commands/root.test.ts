@@ -14,3 +14,20 @@ test("renderRootHelp lists the planned top-level command groups", () => {
   assert.match(help, /agent/);
   assert.match(help, /monitor/);
 });
+
+test("renderRootHelp lists currently wired terminal commands", () => {
+  const help = renderRootHelp();
+
+  assert.match(help, /balance --chain/);
+  assert.match(help, /allbal --testnet/);
+  assert.match(help, /gas estimate/);
+  assert.match(help, /trace --chain/);
+  assert.match(help, /deploy --chain/);
+});
+
+test("renderRootHelp documents workspace config support", () => {
+  const help = renderRootHelp();
+
+  assert.match(help, /\.chainmind\.yaml/);
+  assert.match(help, /CHAINMIND_ENV/);
+});

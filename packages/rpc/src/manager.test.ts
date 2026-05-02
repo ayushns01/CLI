@@ -7,6 +7,7 @@ import {
   RpcProviderError,
   type RpcProvider
 } from "./manager.ts";
+import { isLikelyViemTransportError } from "./viem-clients.ts";
 
 test("selectProvider chooses the fastest healthy provider", async () => {
   const providers: RpcProvider[] = [
@@ -57,6 +58,12 @@ test("classifyRpcError maps common failures to structured categories", () => {
   assert.equal(classifyRpcError(new Error("request timeout")), "timeout");
   assert.equal(classifyRpcError(new Error("429 too many requests")), "rate-limit");
   assert.equal(classifyRpcError(new Error("invalid json response")), "bad-response");
+});
+
+test("isLikelyViemTransportError distinguishes transport failures from EVM reverts", () => {
+  assert.equal(isLikelyViemTransportError(new Error("HTTP request failed. Details: fetch failed")), true);
+  assert.equal(isLikelyViemTransportError(new Error("getaddrinfo ENOTFOUND rpc.example")), true);
+  assert.equal(isLikelyViemTransportError(new Error("execution reverted")), false);
 });
 
 function provider(name: string, latencyMs: number, failure?: "timeout" | "rate-limit" | "bad-response"): RpcProvider {
