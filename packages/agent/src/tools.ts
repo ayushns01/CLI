@@ -8,7 +8,8 @@ import type { ToolDescriptor } from "./types.ts";
 import type { ChainRegistry } from "../../chains/src/index.ts";
 import { getNativeBalance, getNativeBalancesAcrossChains } from "../../tx/src/balance.ts";
 import { simulateTransaction } from "../../tx/src/simulate.ts";
-import { createViemBalanceClient, createViemSimulationClient } from "../../rpc/src/viem-clients.ts";
+import { estimateGasCost } from "../../tx/src/gas.ts";
+import { createViemBalanceClient, createViemGasClient, createViemSimulationClient } from "../../rpc/src/viem-clients.ts";
 
 /**
  * Create a tool registry.
@@ -239,6 +240,41 @@ export function createRealToolRegistry(deps: { chainRegistry: ChainRegistry }): 
       return {
         address,
         balances: results.map((r) => ({ chainKey: r.chainKey, balance: r.balanceWei.toString(), formatted: r.formatted }))
+      };
+    }
+  });
+
+  registry.register({
+    name: "estimate_gas",
+    description: "Estimate gas limit and fee for a transaction (real RPC eth_estimateGas + fee data)",
+    approvalLevel: "simulate",
+    isHighRisk: false,
+    execute: async (args) => {
+      const chainKey = String(args.chainKey);
+      const chain = chainRegistry.getByName(chainKey);
+      const valueWei = typeof args.valueWei === "bigint"
+        ? args.valueWei
+        : BigInt(args.valueWei !== undefined ? String(args.valueWei) : "0");
+      const gasClient = createViemGasClient({ rpcUrl: chain.rpcUrls[0] });
+      const data = await gasClient.estimate({
+        from: String(args.from),
+        to: String(args.to),
+        data: typeof args.data === "string" ? args.data : "0x",
+        valueWei
+      });
+      const cost = estimateGasCost({
+        gasLimit: data.gasLimit,
+        maxFeePerGasWei: data.maxFeePerGasWei,
+        symbol: chain.nativeCurrency.symbol,
+        decimals: chain.nativeCurrency.decimals
+      });
+      return {
+        chainKey: chain.key,
+        gasLimit: data.gasLimit.toString(),
+        maxFeePerGasWei: data.maxFeePerGasWei.toString(),
+        maxPriorityFeePerGasWei: data.maxPriorityFeePerGasWei?.toString(),
+        estimatedCostWei: cost.totalWei.toString(),
+        formatted: cost.formatted
       };
     }
   });

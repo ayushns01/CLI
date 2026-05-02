@@ -92,6 +92,57 @@ export function createViemSimulationClient(options: ViemClientOptions): Simulati
   };
 }
 
+export interface GasEstimateRequest {
+  from: string;
+  to: string;
+  data: string;
+  valueWei: bigint;
+}
+
+export interface GasEstimateData {
+  gasLimit: bigint;
+  maxFeePerGasWei: bigint;
+  maxPriorityFeePerGasWei?: bigint;
+}
+
+export interface GasClient {
+  estimate(request: GasEstimateRequest): Promise<GasEstimateData>;
+}
+
+/**
+ * Build a viem-backed gas client that combines eth_estimateGas with
+ * fee data (EIP-1559 maxFeePerGas / maxPriorityFeePerGas, falling back
+ * to legacy gasPrice on chains without 1559).
+ */
+export function createViemGasClient(options: ViemClientOptions): GasClient {
+  const client = createPublicClient({
+    transport: http(options.rpcUrl, { timeout: options.timeoutMs ?? 10_000 })
+  });
+
+  return {
+    async estimate(request: GasEstimateRequest): Promise<GasEstimateData> {
+      const gasLimit = await client.estimateGas({
+        account: request.from as Address,
+        to: request.to as Address,
+        data: request.data as Hex,
+        value: request.valueWei
+      });
+
+      try {
+        const fees = await client.estimateFeesPerGas();
+        return {
+          gasLimit,
+          maxFeePerGasWei: fees.maxFeePerGas,
+          maxPriorityFeePerGasWei: fees.maxPriorityFeePerGas
+        };
+      } catch {
+        const gasPrice = await client.getGasPrice();
+        return { gasLimit, maxFeePerGasWei: gasPrice };
+      }
+    }
+  };
+}
+
 function extractRevertData(err: unknown): string | undefined {
   if (err instanceof BaseError) {
     const reverted = err.walk((e) => e instanceof ContractFunctionRevertedError);
