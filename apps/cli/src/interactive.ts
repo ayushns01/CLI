@@ -11,6 +11,7 @@ export interface InteractiveChoice {
 
 export interface InteractivePrompt {
   select(prompt: string, choices: InteractiveChoice[]): Promise<string>;
+  multiSelect(prompt: string, choices: InteractiveChoice[]): Promise<string[]>;
   input(prompt: string, options?: InteractiveInputOptions): Promise<string>;
 }
 
@@ -130,7 +131,7 @@ async function buildCommandArgs(
   }
 
   if (feature === "deploy") {
-    const chain = await selectChain(options);
+    const chainKeys = await selectChains(options);
     const deployInput = await collectDeployInput(options);
     const privateKey = await options.prompt.input("Private key", { secret: true, validate: validateHex });
     const confirm = await options.prompt.select("Broadcast real transaction?", [
@@ -146,7 +147,7 @@ async function buildCommandArgs(
     return [
       "deploy",
       "--chain",
-      chain,
+      chainKeys.join(","),
       deployInput.flag,
       deployInput.value,
       "--private-key",
@@ -208,6 +209,13 @@ function byteLength(hex: string): string {
 async function selectChain(options: InteractiveSessionOptions): Promise<string> {
   return options.prompt.select(
     "Select chain",
+    options.chainKeys.map((chainKey) => ({ label: chainKey, value: chainKey }))
+  );
+}
+
+async function selectChains(options: InteractiveSessionOptions): Promise<string[]> {
+  return options.prompt.multiSelect(
+    "Select chains to deploy to",
     options.chainKeys.map((chainKey) => ({ label: chainKey, value: chainKey }))
   );
 }
@@ -285,6 +293,72 @@ export class TerminalPrompt implements InteractivePrompt {
     }
   }
 
+  async multiSelect(prompt: string, choices: InteractiveChoice[]): Promise<string[]> {
+    if (choices.length === 0) {
+      throw new Error("Cannot render an empty multi-select menu");
+    }
+
+    const input = this.terminal.input;
+    if (!input || typeof input.setRawMode !== "function") {
+      throw new Error("Interactive multi-select requires a TTY with raw mode support");
+    }
+
+    let cursorIndex = 0;
+    const selected = new Set<number>();
+    const lineCount = choices.length + 2;
+    const wasRaw = input.isRaw;
+    this.readline.pause?.();
+    input.setRawMode(true);
+    input.resume();
+    this.write(renderMultiSelect(prompt, choices, cursorIndex, selected));
+
+    try {
+      while (true) {
+        const key = await this.readRawKey(input);
+
+        if (key === "") {
+          this.write("\n");
+          exit(130);
+        }
+        if (key === "[A") {
+          cursorIndex = cursorIndex === 0 ? choices.length - 1 : cursorIndex - 1;
+          this.clearSelect(lineCount);
+          this.write(renderMultiSelect(prompt, choices, cursorIndex, selected));
+          continue;
+        }
+        if (key === "[B") {
+          cursorIndex = (cursorIndex + 1) % choices.length;
+          this.clearSelect(lineCount);
+          this.write(renderMultiSelect(prompt, choices, cursorIndex, selected));
+          continue;
+        }
+        if (key === " ") {
+          if (selected.has(cursorIndex)) {
+            selected.delete(cursorIndex);
+          } else {
+            selected.add(cursorIndex);
+          }
+          this.clearSelect(lineCount);
+          this.write(renderMultiSelect(prompt, choices, cursorIndex, selected));
+          continue;
+        }
+        if (key === "\r" || key === "\n") {
+          if (selected.size === 0) {
+            continue;
+          }
+          const indices = [...selected].sort((a, b) => a - b);
+          const selectedLabels = indices.map((i) => choices[i].label).join(", ");
+          this.clearSelect(lineCount);
+          this.write(`${color(prompt, "cyan")}: ${selectedLabels}\n`);
+          return indices.map((i) => choices[i].value);
+        }
+      }
+    } finally {
+      input.setRawMode(Boolean(wasRaw));
+      this.readline.resume?.();
+    }
+  }
+
   async input(prompt: string, options?: InteractiveInputOptions): Promise<string> {
     while (true) {
       const suffix = options?.defaultValue ? ` (${options.defaultValue})` : "";
@@ -354,6 +428,27 @@ function renderSelect(prompt: string, choices: InteractiveChoice[], selectedInde
       const marker = selected ? color("❯", "green") : " ";
       const label = selected ? color(choice.label, "bold") : choice.label;
       return `${marker} ${label}`;
+    })
+  ].join("\n") + "\n";
+}
+
+function renderMultiSelect(
+  prompt: string,
+  choices: InteractiveChoice[],
+  cursorIndex: number,
+  selected: Set<number>
+): string {
+  const hint = color("(↑↓ move  space toggle  enter confirm)", "muted");
+  return [
+    "",
+    `${color(prompt, "cyan")}  ${hint}`,
+    ...choices.map((choice, index) => {
+      const isCursor = index === cursorIndex;
+      const isSelected = selected.has(index);
+      const marker = isCursor ? color("❯", "green") : " ";
+      const checkbox = isSelected ? color("[✓]", "green") : color("[ ]", "muted");
+      const label = isCursor ? color(choice.label, "bold") : choice.label;
+      return `${marker} ${checkbox} ${label}`;
     })
   ].join("\n") + "\n";
 }

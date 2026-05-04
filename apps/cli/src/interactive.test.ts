@@ -195,6 +195,33 @@ test("interactive menu routes Deploy contract artifact path selection only after
   assert(output.some((line) => line.includes("Loaded Token")));
 });
 
+test("interactive menu routes Deploy to multiple chains when comma-separated chains selected", async () => {
+  const calls: string[][] = [];
+
+  await runInteractiveSession({
+    prompt: scriptedPrompt(["deploy", "sepolia,base-sepolia", "0x60006000f3", "0xkey", "yes", "exit"]),
+    write: () => {},
+    runCommand: async (args) => {
+      calls.push(args);
+      return { stdout: "deployed", stderr: "", exitCode: 0 };
+    },
+    chainKeys: ["sepolia", "base-sepolia"]
+  });
+
+  assert.deepEqual(calls, [
+    [
+      "deploy",
+      "--chain",
+      "sepolia,base-sepolia",
+      "--bytecode",
+      "0x60006000f3",
+      "--private-key",
+      "0xkey",
+      "--confirm-broadcast"
+    ]
+  ]);
+});
+
 test("TerminalPrompt input validate accepts valid address on first try", async () => {
   const questions: string[] = [];
   const output: string[] = [];
@@ -234,6 +261,13 @@ function scriptedPrompt(answers: string[]): InteractivePrompt {
         throw new Error("No scripted select answer left");
       }
       return answer;
+    },
+    multiSelect: async () => {
+      const answer = answers.shift();
+      if (answer === undefined) {
+        throw new Error("No scripted multiSelect answer left");
+      }
+      return answer.split(",").map((s) => s.trim());
     },
     input: async () => {
       const answer = answers.shift();
