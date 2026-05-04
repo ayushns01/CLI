@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 import { createChainRegistry, loadBuiltInChains } from "../../../packages/chains/src/index.ts";
 import type { ChainMetadata, ChainRegistry } from "../../../packages/chains/src/index.ts";
@@ -8,12 +8,13 @@ import {
   type ChainMindConfig
 } from "../../../packages/config/src/index.ts";
 import { createRealToolRegistry, type ToolRegistry } from "../../../packages/agent/src/tools.ts";
+import { submitVerification, pollVerificationStatus } from "../../../packages/contracts/src/verify.ts";
 import { renderRootHelp } from "./commands/root.ts";
 import { renderBalanceResult } from "./commands/balance.ts";
 import { renderAllBalancesResult } from "./commands/allbal.ts";
 import { renderGasEstimateResult } from "./commands/gas/estimate.ts";
 import { renderTraceReport } from "./commands/trace.ts";
-import { renderDeploymentRecord } from "./commands/contract/deploy.ts";
+import { renderDeploymentRecord, renderMultiChainDeploySummary } from "./commands/contract/deploy.ts";
 import { readArtifactFile } from "./artifact-reader.ts";
 
 export interface CliResult {
@@ -24,7 +25,7 @@ export interface CliResult {
 
 export interface CliChainRegistry {
   all(): Array<{ key: string; environment: string }>;
-  getByName(nameOrAlias: string): ChainMetadata;
+  getByName(nameOrAlias: string): ChainMetadata & { verifierApiUrl?: string };
 }
 
 export interface CliDependencies {
@@ -122,13 +123,63 @@ export async function runCli(
         return fail("deploy_contract requires --confirm-broadcast because it signs and broadcasts a real transaction");
       }
       const deployInput = await resolveDeployInput(options);
-      const result = await deps.toolRegistry.executeTool("deploy_contract", {
-        chainKey: requiredOption(options, "chain"),
-        bytecode: deployInput.bytecode,
-        privateKey: requiredOption(options, "private-key"),
-        ...(options["value-wei"] ? { valueWei: options["value-wei"] } : {})
-      });
-      return ok(renderDeployToolResult(result, deployInput.contractName));
+      const chainOption = requiredOption(options, "chain");
+      const chainKeys = chainOption.split(",").map((k) => k.trim()).filter(Boolean);
+
+      if (chainKeys.length === 1) {
+        const result = await deps.toolRegistry.executeTool("deploy_contract", {
+          chainKey: chainKeys[0],
+          bytecode: deployInput.bytecode,
+          privateKey: requiredOption(options, "private-key"),
+          ...(options["value-wei"] ? { valueWei: options["value-wei"] } : {})
+        });
+        const record = extractDeployRecord(result, deployInput.contractName, chainKeys[0]);
+        let output = renderDeploymentRecord(record);
+        if (options.verify) {
+          const verifyOutput = await runVerification(record.address, chainKeys[0], options, deps);
+          output += `\n${verifyOutput}`;
+        }
+        return ok(output);
+      }
+
+      const privateKey = requiredOption(options, "private-key");
+      const chainResults = await Promise.allSettled(
+        chainKeys.map(async (chainKey) => {
+          const result = await deps.toolRegistry.executeTool("deploy_contract", {
+            chainKey,
+            bytecode: deployInput.bytecode,
+            privateKey,
+            ...(options["value-wei"] ? { valueWei: options["value-wei"] } : {})
+          });
+          return { chainKey, record: extractDeployRecord(result, deployInput.contractName, chainKey) };
+        })
+      );
+
+      const rows: Array<{ chainKey: string; address?: string; txHash?: string; error?: string; verifyStatus?: string }> = [];
+      for (let i = 0; i < chainResults.length; i++) {
+        const settled = chainResults[i];
+        const chainKey = chainKeys[i];
+        if (settled.status === "fulfilled") {
+          const { record } = settled.value;
+          let verifyStatus: string | undefined;
+          if (options.verify) {
+            verifyStatus = await runVerification(record.address, chainKey, options, deps);
+          }
+          rows.push({ chainKey, address: record.address, txHash: record.transactionHash, verifyStatus });
+        } else {
+          const message = settled.reason instanceof Error ? settled.reason.message : String(settled.reason);
+          rows.push({ chainKey, error: message });
+        }
+      }
+      return ok(renderMultiChainDeploySummary(deployInput.contractName, rows));
+    }
+
+    if (command === "verify") {
+      const options = parseOptions(args.slice(1));
+      const chainKey = requiredOption(options, "chain");
+      const address = requiredOption(options, "address");
+      const output = await runVerification(address, chainKey, options, deps);
+      return ok(output);
     }
 
     return fail(`Command '${args.join(" ")}' is not implemented yet.`);
@@ -338,20 +389,87 @@ function renderTraceToolResult(result: unknown): string {
   });
 }
 
-function renderDeployToolResult(result: unknown, contractName: string): string {
+function extractDeployRecord(
+  result: unknown,
+  contractName: string,
+  chainKey: string
+): { contractName: string; chainKey: string; address: string; transactionHash: string; blockNumber: bigint } {
   const output = result as {
-    chainKey: string;
+    chainKey?: string;
     contractAddress: string;
     transactionHash: string;
     blockNumber: string;
   };
-  return renderDeploymentRecord({
+  return {
     contractName,
-    chainKey: output.chainKey,
+    chainKey: output.chainKey ?? chainKey,
     address: output.contractAddress,
     transactionHash: output.transactionHash,
     blockNumber: BigInt(output.blockNumber)
-  });
+  };
+}
+
+async function runVerification(
+  contractAddress: string,
+  chainKey: string,
+  options: Record<string, string | true>,
+  deps: CliDependencies
+): Promise<string> {
+  const apiKey = process.env.ETHERSCAN_API_KEY;
+  if (!apiKey) {
+    return "verify: skipped (ETHERSCAN_API_KEY not set)";
+  }
+
+  const sourceFile = typeof options.source === "string" ? options.source : undefined;
+  if (!sourceFile) {
+    return "verify: skipped (--source <file.sol> required)";
+  }
+
+  const contractName = typeof options.name === "string" ? options.name : "Contract";
+  const compilerVersion = typeof options.compiler === "string" ? options.compiler : "v0.8.20+commit.a1b79de6";
+
+  let chain: ChainMetadata;
+  try {
+    chain = deps.chainRegistry.getByName(chainKey);
+  } catch {
+    return `verify: skipped (unknown chain ${chainKey})`;
+  }
+
+  if (!chain.verifierApiUrl) {
+    return `verify: skipped (no verifier configured for ${chainKey})`;
+  }
+
+  let sourceCode: string;
+  try {
+    sourceCode = readFileSync(sourceFile, "utf8");
+  } catch {
+    return `verify: skipped (could not read ${sourceFile})`;
+  }
+
+  try {
+    const guid = await submitVerification({
+      apiUrl: chain.verifierApiUrl,
+      apiKey,
+      contractAddress,
+      sourceCode,
+      contractName,
+      compilerVersion,
+      optimizationUsed: options.optimization === "true" || options.optimization === true
+    });
+
+    const verifyResult = await pollVerificationStatus(guid, chain.verifierApiUrl, apiKey);
+    const explorerLink = `${chain.explorerUrl}/address/${contractAddress}#code`;
+
+    if (verifyResult.status === "success") {
+      return `verify: ✓ verified  ${explorerLink}`;
+    }
+    if (verifyResult.status === "pending") {
+      return `verify: pending (check manually: ${explorerLink})`;
+    }
+    return `verify: ✗ failed — ${verifyResult.message}`;
+  } catch (err) {
+    return `verify: ✗ error — ${err instanceof Error ? err.message : String(err)}`;
+  }
 }
 
 function ok(stdout: string): CliResult {

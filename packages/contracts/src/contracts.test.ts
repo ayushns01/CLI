@@ -9,7 +9,7 @@ import {
   createDeploymentRecord
 } from "./deployer.ts";
 import { buildContractReadCall, buildContractWriteCall, listContractFunctions } from "./studio.ts";
-import { buildVerificationRequest } from "./verify.ts";
+import { buildVerificationRequest, submitVerification, pollVerificationStatus } from "./verify.ts";
 
 const transferAbi = [
   {
@@ -130,6 +130,119 @@ test("buildVerificationRequest hides explorer-specific details behind one reques
   assert.equal(request.provider, "explorer");
   assert.equal(request.chainKey, "base-sepolia");
   assert.equal(request.contractAddress, "0x3333333333333333333333333333333333333333");
+});
+
+test("submitVerification sends correct form fields to verifier API", async () => {
+  const captured: { url: string; body: string } = { url: "", body: "" };
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    captured.url = String(input);
+    captured.body = String(init?.body ?? "");
+    return new Response(JSON.stringify({ status: "1", message: "OK", result: "abc-guid-123" }), {
+      status: 200,
+      headers: { "content-type": "application/json" }
+    });
+  };
+
+  try {
+    const guid = await submitVerification({
+      apiUrl: "https://api.etherscan.io/api",
+      apiKey: "TESTKEY",
+      contractAddress: "0x3333333333333333333333333333333333333333",
+      sourceCode: "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;",
+      contractName: "Token",
+      compilerVersion: "v0.8.20+commit.a1b79de6"
+    });
+
+    assert.equal(guid, "abc-guid-123");
+    assert.equal(captured.url, "https://api.etherscan.io/api");
+    assert(captured.body.includes("module=contract"));
+    assert(captured.body.includes("action=verifysourcecode"));
+    assert(captured.body.includes("contractaddress=0x3333333333333333333333333333333333333333"));
+    assert(captured.body.includes("contractname=Token"));
+    assert(captured.body.includes("apikey=TESTKEY"));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("submitVerification throws when verifier API returns status 0", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    return new Response(JSON.stringify({ status: "0", message: "NOTOK", result: "Contract source code already verified" }), {
+      status: 200,
+      headers: { "content-type": "application/json" }
+    });
+  };
+
+  try {
+    await assert.rejects(
+      () => submitVerification({
+        apiUrl: "https://api.etherscan.io/api",
+        apiKey: "TESTKEY",
+        contractAddress: "0x1111111111111111111111111111111111111111",
+        sourceCode: "// src",
+        contractName: "Token",
+        compilerVersion: "v0.8.20+commit.a1b79de6"
+      }),
+      /Verification submission failed/
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("pollVerificationStatus returns success when API reports Pass", async () => {
+  let callCount = 0;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    callCount++;
+    const result = callCount < 2 ? "Pending in queue" : "Pass - Verified";
+    return new Response(JSON.stringify({ status: "1", message: "OK", result }), {
+      status: 200,
+      headers: { "content-type": "application/json" }
+    });
+  };
+
+  try {
+    const verifyResult = await pollVerificationStatus(
+      "abc-guid-123",
+      "https://api.etherscan.io/api",
+      "TESTKEY",
+      { pollIntervalMs: 0 }
+    );
+
+    assert.equal(verifyResult.status, "success");
+    assert.equal(verifyResult.guid, "abc-guid-123");
+    assert(callCount >= 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("pollVerificationStatus returns failed when API reports Fail", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    return new Response(JSON.stringify({ status: "0", message: "NOTOK", result: "Fail - Unable to locate ContractCode" }), {
+      status: 200,
+      headers: { "content-type": "application/json" }
+    });
+  };
+
+  try {
+    const verifyResult = await pollVerificationStatus(
+      "bad-guid",
+      "https://api.etherscan.io/api",
+      "TESTKEY",
+      { pollIntervalMs: 0 }
+    );
+
+    assert.equal(verifyResult.status, "failed");
+    assert(verifyResult.message.includes("Fail"));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("listContractFunctions separates read and write ABI functions", () => {

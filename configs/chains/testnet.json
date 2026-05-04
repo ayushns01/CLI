@@ -10,6 +10,7 @@
       "decimals": 18
     },
     "explorerUrl": "https://sepolia.etherscan.io",
+    "verifierApiUrl": "https://api-sepolia.etherscan.io/api",
     "rpcUrls": [
       "https://ethereum-sepolia-rpc.publicnode.com",
       "https://rpc.sepolia.org"
@@ -26,9 +27,44 @@
       "decimals": 18
     },
     "explorerUrl": "https://sepolia.basescan.org",
+    "verifierApiUrl": "https://api-sepolia.basescan.org/api",
     "rpcUrls": [
       "https://sepolia.base.org",
       "https://base-sepolia-rpc.publicnode.com"
+    ]
+  },
+  {
+    "key": "arbitrum-sepolia",
+    "name": "Arbitrum Sepolia",
+    "id": 421614,
+    "environment": "testnet",
+    "aliases": ["arb-sepolia"],
+    "nativeCurrency": {
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerUrl": "https://sepolia.arbiscan.io",
+    "verifierApiUrl": "https://api-sepolia.arbiscan.io/api",
+    "rpcUrls": [
+      "https://sepolia-rollup.arbitrum.io/rpc",
+      "https://arbitrum-sepolia-rpc.publicnode.com"
+    ]
+  },
+  {
+    "key": "optimism-sepolia",
+    "name": "Optimism Sepolia",
+    "id": 11155420,
+    "environment": "testnet",
+    "aliases": ["op-sepolia"],
+    "nativeCurrency": {
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerUrl": "https://sepolia-optimism.etherscan.io",
+    "verifierApiUrl": "https://api-sepolia-optimistic.etherscan.io/api",
+    "rpcUrls": [
+      "https://sepolia.optimism.io",
+      "https://optimism-sepolia-rpc.publicnode.com"
     ]
   }
 ]

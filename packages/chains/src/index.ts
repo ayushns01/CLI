@@ -14,6 +14,7 @@ export interface ChainMetadata {
     decimals: number;
   };
   explorerUrl: string;
+  verifierApiUrl?: string;
   rpcUrls: string[];
 }
 

@@ -318,6 +318,114 @@ interface ToolCall {
   args: Record<string, unknown>;
 }
 
+test("runCli deploys to multiple chains when --chain is comma-separated", async () => {
+  const calls: ToolCall[] = [];
+  const deployResult = {
+    contractAddress: "0x2222222222222222222222222222222222222222",
+    transactionHash: "0x3333333333333333333333333333333333333333333333333333333333333333",
+    blockNumber: "123"
+  };
+  const result = await runCli(
+    [
+      "deploy",
+      "--chain", "sepolia,base-sepolia",
+      "--bytecode", "0x60006000",
+      "--private-key", "0x1111111111111111111111111111111111111111111111111111111111111111",
+      "--confirm-broadcast"
+    ],
+    fakeDeps(calls, { deploy_contract: deployResult })
+  );
+
+  assert.equal(result.exitCode, 0);
+  assert.match(result.stdout, /Multi-chain deploy/);
+  assert.match(result.stdout, /sepolia/);
+  assert.match(result.stdout, /base-sepolia/);
+  assert.match(result.stdout, /Deployed: 2\/2 chains/);
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].name, "deploy_contract");
+  assert.equal(calls[0].args.chainKey, "sepolia");
+  assert.equal(calls[1].args.chainKey, "base-sepolia");
+});
+
+test("runCli multi-chain deploy shows failed chains and still reports partial success", async () => {
+  const calls: ToolCall[] = [];
+  let callCount = 0;
+  const result = await runCli(
+    [
+      "deploy",
+      "--chain", "sepolia,base-sepolia",
+      "--bytecode", "0x60006000",
+      "--private-key", "0x1111111111111111111111111111111111111111111111111111111111111111",
+      "--confirm-broadcast"
+    ],
+    {
+      toolRegistry: {
+        executeTool: async (name: string, args: Record<string, unknown>) => {
+          calls.push({ name, args });
+          callCount++;
+          if (callCount === 2) {
+            throw new Error("insufficient funds");
+          }
+          return {
+            contractAddress: "0x2222222222222222222222222222222222222222",
+            transactionHash: "0x3333333333333333333333333333333333333333333333333333333333333333",
+            blockNumber: "123"
+          };
+        }
+      },
+      chainRegistry: fakeChainRegistry()
+    }
+  );
+
+  assert.equal(result.exitCode, 0);
+  assert.match(result.stdout, /Deployed: 1\/2 chains/);
+  assert.match(result.stdout, /insufficient funds/);
+});
+
+test("runCli verify command skips when ETHERSCAN_API_KEY is not set", async () => {
+  const savedKey = process.env.ETHERSCAN_API_KEY;
+  delete process.env.ETHERSCAN_API_KEY;
+
+  try {
+    const result = await runCli(
+      ["verify", "--chain", "sepolia", "--address", "0x2222222222222222222222222222222222222222"],
+      fakeDeps([])
+    );
+
+    assert.equal(result.exitCode, 0);
+    assert.match(result.stdout, /ETHERSCAN_API_KEY not set/);
+  } finally {
+    if (savedKey !== undefined) {
+      process.env.ETHERSCAN_API_KEY = savedKey;
+    }
+  }
+});
+
+interface ToolCall {
+  name: string;
+  args: Record<string, unknown>;
+}
+
+function fakeChainRegistry() {
+  return {
+    all: () => [
+      { key: "ethereum", environment: "mainnet" },
+      { key: "sepolia", environment: "testnet" },
+      { key: "base-sepolia", environment: "testnet" }
+    ],
+    getByName: (name: string) => {
+      const chains: Record<string, { key: string; environment: string; explorerUrl: string; verifierApiUrl?: string }> = {
+        ethereum: { key: "ethereum", environment: "mainnet", explorerUrl: "https://etherscan.io", verifierApiUrl: "https://api.etherscan.io/api" },
+        sepolia: { key: "sepolia", environment: "testnet", explorerUrl: "https://sepolia.etherscan.io", verifierApiUrl: "https://api-sepolia.etherscan.io/api" },
+        "base-sepolia": { key: "base-sepolia", environment: "testnet", explorerUrl: "https://sepolia.basescan.org", verifierApiUrl: "https://api-sepolia.basescan.org/api" }
+      };
+      const chain = chains[name];
+      if (!chain) throw new Error(`Unknown chain: ${name}`);
+      return chain;
+    }
+  };
+}
+
 function fakeDeps(calls: ToolCall[], responses: Record<string, unknown> = {}) {
   return {
     toolRegistry: {
@@ -326,13 +434,7 @@ function fakeDeps(calls: ToolCall[], responses: Record<string, unknown> = {}) {
         return responses[name] ?? {};
       }
     },
-    chainRegistry: {
-      all: () => [
-        { key: "ethereum", environment: "mainnet" },
-        { key: "sepolia", environment: "testnet" },
-        { key: "base-sepolia", environment: "testnet" }
-      ]
-    }
+    chainRegistry: fakeChainRegistry()
   };
 }
 

@@ -10,6 +10,7 @@
       "decimals": 18
     },
     "explorerUrl": "https://etherscan.io",
+    "verifierApiUrl": "https://api.etherscan.io/api",
     "rpcUrls": [
       "https://ethereum-rpc.publicnode.com",
       "https://rpc.ankr.com/eth"
@@ -26,9 +27,61 @@
       "decimals": 18
     },
     "explorerUrl": "https://basescan.org",
+    "verifierApiUrl": "https://api.basescan.org/api",
     "rpcUrls": [
       "https://mainnet.base.org",
       "https://base-rpc.publicnode.com"
+    ]
+  },
+  {
+    "key": "arbitrum",
+    "name": "Arbitrum One",
+    "id": 42161,
+    "environment": "mainnet",
+    "aliases": ["arbitrum-one", "arb", "arb-one"],
+    "nativeCurrency": {
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerUrl": "https://arbiscan.io",
+    "verifierApiUrl": "https://api.arbiscan.io/api",
+    "rpcUrls": [
+      "https://arb1.arbitrum.io/rpc",
+      "https://arbitrum-one-rpc.publicnode.com"
+    ]
+  },
+  {
+    "key": "optimism",
+    "name": "Optimism",
+    "id": 10,
+    "environment": "mainnet",
+    "aliases": ["op", "op-mainnet"],
+    "nativeCurrency": {
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerUrl": "https://optimistic.etherscan.io",
+    "verifierApiUrl": "https://api-optimistic.etherscan.io/api",
+    "rpcUrls": [
+      "https://mainnet.optimism.io",
+      "https://optimism-rpc.publicnode.com"
+    ]
+  },
+  {
+    "key": "polygon",
+    "name": "Polygon",
+    "id": 137,
+    "environment": "mainnet",
+    "aliases": ["matic", "polygon-mainnet"],
+    "nativeCurrency": {
+      "symbol": "POL",
+      "decimals": 18
+    },
+    "explorerUrl": "https://polygonscan.com",
+    "verifierApiUrl": "https://api.polygonscan.com/api",
+    "rpcUrls": [
+      "https://polygon-rpc.com",
+      "https://polygon-bor-rpc.publicnode.com"
     ]
   }
 ]
