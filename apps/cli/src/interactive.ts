@@ -1,5 +1,6 @@
 import { createInterface, type Interface } from "node:readline/promises";
 import { env, exit, stdin, stdout } from "node:process";
+import { privateKeyToAccount } from "viem/accounts";
 
 import type { CliResult } from "./router.ts";
 import { readArtifactFile } from "./artifact-reader.ts";
@@ -93,10 +94,18 @@ async function buildCommandArgs(
 
   if (feature === "send") {
     const chain = await selectChain(options);
-    const to = await options.prompt.input("To address or ENS name", { validate: validateAddressOrEns });
-    const value = await options.prompt.input("Amount (ETH)", { validate: validateEthAmount });
+    const to = await options.prompt.input("To  (address or name.eth)", { validate: validateAddressOrEns });
+    if (looksLikeEns(to)) {
+      options.write(formatStatus("ENS name will be resolved on broadcast", "muted"));
+    }
+    const value = await options.prompt.input("Amount  (ETH, e.g. 0.1)", { validate: validateEthAmount });
     const privateKey = await options.prompt.input("Private key", { secret: true, validate: validateHex });
-    const confirm = await options.prompt.select("Broadcast real transaction?", [
+    const fromAddress = deriveAddress(privateKey);
+    if (fromAddress) {
+      options.write(formatStatus(`Wallet: ${fromAddress}`, "success"));
+    }
+    options.write(renderTxPreview({ type: "send", chain, from: fromAddress, to, amount: `${value} ETH` }));
+    const confirm = await options.prompt.select("Broadcast this transaction?", [
       { label: "No, cancel", value: "no" },
       { label: "Yes, broadcast", value: "yes" }
     ]);
@@ -109,11 +118,19 @@ async function buildCommandArgs(
 
   if (feature === "transfer") {
     const chain = await selectChain(options);
-    const token = await options.prompt.input("Token address", { validate: validateAddress });
-    const to = await options.prompt.input("To address or ENS name", { validate: validateAddressOrEns });
-    const amount = await options.prompt.input("Amount", { validate: validateTokenAmount });
+    const token = await options.prompt.input("Token contract address", { validate: validateAddress });
+    const to = await options.prompt.input("To  (address or name.eth)", { validate: validateAddressOrEns });
+    if (looksLikeEns(to)) {
+      options.write(formatStatus("ENS name will be resolved on broadcast", "muted"));
+    }
+    const amount = await options.prompt.input("Amount  (e.g. 100, 0.5)", { validate: validateTokenAmount });
     const privateKey = await options.prompt.input("Private key", { secret: true, validate: validateHex });
-    const confirm = await options.prompt.select("Broadcast real transaction?", [
+    const fromAddress = deriveAddress(privateKey);
+    if (fromAddress) {
+      options.write(formatStatus(`Wallet: ${fromAddress}`, "success"));
+    }
+    options.write(renderTxPreview({ type: "transfer", chain, from: fromAddress, to, amount, token }));
+    const confirm = await options.prompt.select("Broadcast this transaction?", [
       { label: "No, cancel", value: "no" },
       { label: "Yes, broadcast", value: "yes" }
     ]);
@@ -470,6 +487,64 @@ export function validateTokenAmount(value: string): string | undefined {
   return /^\d+(\.\d+)?$/.test(value.trim()) && Number(value) > 0
     ? undefined
     : "Must be a positive number (e.g. 100, 0.5)";
+}
+
+function deriveAddress(privateKey: string): string | undefined {
+  try {
+    const normalized = privateKey.startsWith("0x") ? privateKey : `0x${privateKey}`;
+    return privateKeyToAccount(normalized as `0x${string}`).address;
+  } catch {
+    return undefined;
+  }
+}
+
+function looksLikeEns(value: string): boolean {
+  return /^[a-zA-Z0-9-]+\.eth$/.test(value.trim());
+}
+
+interface TxPreviewOptions {
+  type: "send" | "transfer";
+  chain: string;
+  from: string | undefined;
+  to: string;
+  amount: string;
+  token?: string;
+}
+
+function renderTxPreview(opts: TxPreviewOptions): string {
+  const W = 48;
+  const bar = "─".repeat(W);
+  const title = opts.type === "send" ? "Send Preview" : "Transfer Preview";
+
+  const rows: Array<[string, string]> = [
+    ["Chain", opts.chain],
+    ["From", opts.from ? shortenAddress(opts.from) : "unknown"],
+    ["To", opts.to],
+    ["Amount", opts.amount]
+  ];
+  if (opts.token) {
+    rows.splice(2, 0, ["Token", shortenAddress(opts.token)]);
+  }
+
+  const labelW = 8;
+  const lines = [
+    "",
+    color(`┌── ${title} ${"─".repeat(W - title.length - 4)}┐`, "cyan"),
+    color("│", "cyan") + " ".repeat(W) + color("│", "cyan"),
+    ...rows.map(([label, value]) => {
+      const truncated = value.length > W - labelW - 2 ? `${value.slice(0, W - labelW - 5)}...` : value;
+      const row = `  ${label.padEnd(labelW)}${truncated}`;
+      return color("│", "cyan") + row.padEnd(W) + color("│", "cyan");
+    }),
+    color("│", "cyan") + " ".repeat(W) + color("│", "cyan"),
+    color(`└${bar}┘`, "cyan")
+  ];
+  return lines.join("\n") + "\n";
+}
+
+function shortenAddress(value: string): string {
+  if (!value.startsWith("0x") || value.length <= 14) return value;
+  return `${value.slice(0, 6)}...${value.slice(-4)}`;
 }
 
 function renderSelect(prompt: string, choices: InteractiveChoice[], selectedIndex: number): string {
