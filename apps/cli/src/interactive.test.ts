@@ -195,6 +195,86 @@ test("interactive menu routes Deploy contract artifact path selection only after
   assert(output.some((line) => line.includes("Loaded Token")));
 });
 
+test("interactive menu routes Send ETH selection", async () => {
+  const calls: string[][] = [];
+
+  await runInteractiveSession({
+    prompt: scriptedPrompt(["send", "sepolia", "0x2222222222222222222222222222222222222222", "0.1", "0xprivkey", "yes", "exit"]),
+    write: () => {},
+    runCommand: async (args) => {
+      calls.push(args);
+      return { stdout: "sent", stderr: "", exitCode: 0 };
+    },
+    chainKeys: ["sepolia"]
+  });
+
+  assert.deepEqual(calls, [
+    ["send", "--chain", "sepolia", "--to", "0x2222222222222222222222222222222222222222", "--value", "0.1", "--private-key", "0xprivkey", "--confirm-broadcast"]
+  ]);
+});
+
+test("interactive menu cancels Send ETH when user does not confirm broadcast", async () => {
+  const calls: string[][] = [];
+  const output: string[] = [];
+
+  await runInteractiveSession({
+    prompt: scriptedPrompt(["send", "sepolia", "0x2222222222222222222222222222222222222222", "0.1", "0xprivkey", "no", "exit"]),
+    write: (line) => output.push(line),
+    runCommand: async (args) => {
+      calls.push(args);
+      return { stdout: "sent", stderr: "", exitCode: 0 };
+    },
+    chainKeys: ["sepolia"]
+  });
+
+  assert.deepEqual(calls, []);
+  assert(output.some((line) => line.includes("Send cancelled")));
+});
+
+test("interactive menu routes Transfer token selection", async () => {
+  const calls: string[][] = [];
+
+  await runInteractiveSession({
+    prompt: scriptedPrompt(["transfer", "base", "0x3333333333333333333333333333333333333333", "0x2222222222222222222222222222222222222222", "100", "0xprivkey", "yes", "exit"]),
+    write: () => {},
+    runCommand: async (args) => {
+      calls.push(args);
+      return { stdout: "transferred", stderr: "", exitCode: 0 };
+    },
+    chainKeys: ["base"]
+  });
+
+  assert.deepEqual(calls, [
+    [
+      "transfer",
+      "--chain", "base",
+      "--token", "0x3333333333333333333333333333333333333333",
+      "--to", "0x2222222222222222222222222222222222222222",
+      "--amount", "100",
+      "--private-key", "0xprivkey",
+      "--confirm-broadcast"
+    ]
+  ]);
+});
+
+test("interactive menu cancels Transfer token when user does not confirm broadcast", async () => {
+  const calls: string[][] = [];
+  const output: string[] = [];
+
+  await runInteractiveSession({
+    prompt: scriptedPrompt(["transfer", "base", "0x3333333333333333333333333333333333333333", "0x2222222222222222222222222222222222222222", "100", "0xprivkey", "no", "exit"]),
+    write: (line) => output.push(line),
+    runCommand: async (args) => {
+      calls.push(args);
+      return { stdout: "transferred", stderr: "", exitCode: 0 };
+    },
+    chainKeys: ["base"]
+  });
+
+  assert.deepEqual(calls, []);
+  assert(output.some((line) => line.includes("Transfer cancelled")));
+});
+
 test("interactive menu routes Deploy to multiple chains when comma-separated chains selected", async () => {
   const calls: string[][] = [];
 

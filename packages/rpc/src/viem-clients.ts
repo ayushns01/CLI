@@ -8,7 +8,7 @@
  * network access enters the system.
  */
 
-import { createPublicClient, createWalletClient, http, BaseError, ContractFunctionRevertedError } from "viem";
+import { createPublicClient, createWalletClient, http, BaseError, ContractFunctionRevertedError, parseEther, parseUnits } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import type { Abi, Address, Hex } from "viem";
 
@@ -437,4 +437,170 @@ function extractRevertData(err: unknown): string | undefined {
     if (typeof raw === "string") return raw;
   }
   return undefined;
+}
+
+// ─── ENS resolution ──────────────────────────────────────────────────────────
+
+export function looksLikeEns(value: string): boolean {
+  return /^[a-zA-Z0-9-]+\.eth$/.test(value.trim());
+}
+
+export async function resolveEnsAddress(name: string, mainnetRpcUrl: string): Promise<string> {
+  const client = createPublicClient({
+    transport: http(mainnetRpcUrl, { timeout: 10_000 })
+  });
+  const address = await client.getEnsAddress({ name: name.trim() });
+  if (!address) {
+    throw new Error(`ENS name '${name}' could not be resolved to an address`);
+  }
+  return address;
+}
+
+// ─── Send ETH ────────────────────────────────────────────────────────────────
+
+export interface SendRequest {
+  to: string;
+  valueWei: bigint;
+}
+
+export interface SendResult {
+  transactionHash: string;
+  blockNumber: bigint;
+  from: string;
+  to: string;
+  valueWei: bigint;
+}
+
+export interface SendClient {
+  getFrom(): string;
+  send(request: SendRequest): Promise<SendResult>;
+}
+
+export function createViemSendClient(options: ViemDeployClientOptions): SendClient {
+  const transport = http(options.rpcUrl, { timeout: options.timeoutMs ?? 30_000 });
+  const account = privateKeyToAccount(normalizePrivateKey(options.privateKey));
+  const publicClient = createPublicClient({ transport });
+  const wallet = createWalletClient({ account, transport });
+
+  return {
+    getFrom: () => account.address,
+
+    async send(request: SendRequest): Promise<SendResult> {
+      const txHash = await wallet.sendTransaction({
+        account,
+        to: request.to as Address,
+        value: request.valueWei,
+        chain: null
+      });
+      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+      return {
+        transactionHash: receipt.transactionHash,
+        blockNumber: receipt.blockNumber,
+        from: account.address,
+        to: request.to,
+        valueWei: request.valueWei
+      };
+    }
+  };
+}
+
+// ─── ERC-20 token transfers ───────────────────────────────────────────────────
+
+const ERC20_ABI = [
+  {
+    type: "function",
+    name: "symbol",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "string" }]
+  },
+  {
+    type: "function",
+    name: "decimals",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint8" }]
+  },
+  {
+    type: "function",
+    name: "transfer",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "to", type: "address" },
+      { name: "amount", type: "uint256" }
+    ],
+    outputs: [{ name: "", type: "bool" }]
+  }
+] as const;
+
+export interface TokenInfo {
+  symbol: string;
+  decimals: number;
+}
+
+export interface TokenTransferRequest {
+  tokenAddress: string;
+  to: string;
+  amountWei: bigint;
+}
+
+export interface TokenTransferResult {
+  transactionHash: string;
+  blockNumber: bigint;
+  from: string;
+  to: string;
+  tokenAddress: string;
+  amountWei: bigint;
+}
+
+export interface TokenClient {
+  getInfo(tokenAddress: string): Promise<TokenInfo>;
+  transfer(request: TokenTransferRequest): Promise<TokenTransferResult>;
+}
+
+export function createViemTokenClient(options: ViemDeployClientOptions): TokenClient {
+  const transport = http(options.rpcUrl, { timeout: options.timeoutMs ?? 30_000 });
+  const account = privateKeyToAccount(normalizePrivateKey(options.privateKey));
+  const publicClient = createPublicClient({ transport });
+  const wallet = createWalletClient({ account, transport });
+
+  return {
+    async getInfo(tokenAddress: string): Promise<TokenInfo> {
+      const [symbol, decimals] = await Promise.all([
+        publicClient.readContract({ address: tokenAddress as Address, abi: ERC20_ABI, functionName: "symbol" }),
+        publicClient.readContract({ address: tokenAddress as Address, abi: ERC20_ABI, functionName: "decimals" })
+      ]);
+      return { symbol: String(symbol), decimals: Number(decimals) };
+    },
+
+    async transfer(request: TokenTransferRequest): Promise<TokenTransferResult> {
+      const txHash = await wallet.writeContract({
+        account,
+        address: request.tokenAddress as Address,
+        abi: ERC20_ABI,
+        functionName: "transfer",
+        args: [request.to as Address, request.amountWei],
+        chain: null
+      });
+      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+      return {
+        transactionHash: receipt.transactionHash,
+        blockNumber: receipt.blockNumber,
+        from: account.address,
+        to: request.to,
+        tokenAddress: request.tokenAddress,
+        amountWei: request.amountWei
+      };
+    }
+  };
+}
+
+// ─── Parsing helpers (re-exported for CLI use) ───────────────────────────────
+
+export function parseEthAmount(value: string): bigint {
+  return parseEther(value as `${number}`);
+}
+
+export function parseTokenAmount(value: string, decimals: number): bigint {
+  return parseUnits(value as `${number}`, decimals);
 }

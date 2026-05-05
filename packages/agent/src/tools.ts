@@ -18,7 +18,12 @@ import {
   createViemDeployClient,
   createViemGasClient,
   createViemSimulationClient,
-  createViemTraceClient
+  createViemTraceClient,
+  createViemSendClient,
+  createViemTokenClient,
+  looksLikeEns,
+  resolveEnsAddress,
+  parseTokenAmount
 } from "../../rpc/src/viem-clients.ts";
 import { listContractFunctions } from "../../contracts/src/studio.ts";
 
@@ -174,6 +179,27 @@ export function createDefaultToolRegistry(): ToolRegistry {
     isHighRisk: false,
     execute: async (args) => {
       throw new Error("fork_stop is only available in the real tool registry");
+    }
+  });
+
+  // Wallet sending
+  registry.register({
+    name: "send_eth",
+    description: "Send native ETH to an address",
+    approvalLevel: "broadcast",
+    isHighRisk: false,
+    execute: async (_args) => {
+      return { transactionHash: "", from: "", to: "", valueWei: "0" };
+    }
+  });
+
+  registry.register({
+    name: "send_token",
+    description: "Send ERC-20 tokens to an address",
+    approvalLevel: "broadcast",
+    isHighRisk: false,
+    execute: async (_args) => {
+      return { transactionHash: "", from: "", to: "", symbol: "", amount: "0" };
     }
   });
 
@@ -501,6 +527,80 @@ export function createRealToolRegistry(deps: { chainRegistry: ChainRegistry }): 
         forkSessions.delete(forkId);
       }
       return { forkId, stopped: true };
+    }
+  });
+
+  registry.register({
+    name: "send_eth",
+    description: "Send native ETH to an address (real RPC sign + broadcast)",
+    approvalLevel: "broadcast",
+    isHighRisk: false,
+    execute: async (args) => {
+      const chainKey = requireStringArg(args, "chainKey", "send_eth");
+      const chain = chainRegistry.getByName(chainKey);
+      const privateKey = requireStringArg(args, "privateKey", "send_eth");
+      const toRaw = requireStringArg(args, "to", "send_eth");
+      const valueWei = typeof args.valueWei === "bigint"
+        ? args.valueWei
+        : BigInt(String(args.valueWei ?? "0"));
+
+      const to = looksLikeEns(toRaw)
+        ? await resolveEnsAddress(toRaw, chainRegistry.getByName("ethereum").rpcUrls[0])
+        : toRaw;
+
+      const sendClient = createViemSendClient({ rpcUrl: chain.rpcUrls[0], privateKey });
+      const result = await sendClient.send({ to, valueWei });
+
+      return {
+        chainKey: chain.key,
+        from: result.from,
+        to: result.to,
+        ensName: toRaw !== to ? toRaw : undefined,
+        valueWei: result.valueWei.toString(),
+        symbol: chain.nativeCurrency.symbol,
+        decimals: chain.nativeCurrency.decimals,
+        transactionHash: result.transactionHash,
+        blockNumber: result.blockNumber.toString()
+      };
+    }
+  });
+
+  registry.register({
+    name: "send_token",
+    description: "Send ERC-20 tokens to an address (real RPC sign + broadcast)",
+    approvalLevel: "broadcast",
+    isHighRisk: false,
+    execute: async (args) => {
+      const chainKey = requireStringArg(args, "chainKey", "send_token");
+      const chain = chainRegistry.getByName(chainKey);
+      const privateKey = requireStringArg(args, "privateKey", "send_token");
+      const tokenAddress = requireStringArg(args, "tokenAddress", "send_token");
+      const toRaw = requireStringArg(args, "to", "send_token");
+      const amountRaw = requireStringArg(args, "amount", "send_token");
+
+      const to = looksLikeEns(toRaw)
+        ? await resolveEnsAddress(toRaw, chainRegistry.getByName("ethereum").rpcUrls[0])
+        : toRaw;
+
+      const tokenClient = createViemTokenClient({ rpcUrl: chain.rpcUrls[0], privateKey });
+      const info = await tokenClient.getInfo(tokenAddress);
+      const amountWei = parseTokenAmount(amountRaw, info.decimals);
+
+      const result = await tokenClient.transfer({ tokenAddress, to, amountWei });
+
+      return {
+        chainKey: chain.key,
+        from: result.from,
+        to: result.to,
+        ensName: toRaw !== to ? toRaw : undefined,
+        tokenAddress,
+        symbol: info.symbol,
+        decimals: info.decimals,
+        amount: amountRaw,
+        amountWei: result.amountWei.toString(),
+        transactionHash: result.transactionHash,
+        blockNumber: result.blockNumber.toString()
+      };
     }
   });
 

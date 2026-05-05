@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
+import { parseEthAmount } from "../../../packages/rpc/src/viem-clients.ts";
 
 import { createChainRegistry, loadBuiltInChains } from "../../../packages/chains/src/index.ts";
 import type { ChainMetadata, ChainRegistry } from "../../../packages/chains/src/index.ts";
@@ -15,6 +16,7 @@ import { renderAllBalancesResult } from "./commands/allbal.ts";
 import { renderGasEstimateResult } from "./commands/gas/estimate.ts";
 import { renderTraceReport } from "./commands/trace.ts";
 import { renderDeploymentRecord, renderMultiChainDeploySummary } from "./commands/contract/deploy.ts";
+import { renderSendResult, renderTransferResult } from "./commands/send.ts";
 import { readArtifactFile } from "./artifact-reader.ts";
 
 export interface CliResult {
@@ -172,6 +174,46 @@ export async function runCli(
         }
       }
       return ok(renderMultiChainDeploySummary(deployInput.contractName, rows));
+    }
+
+    if (command === "send") {
+      const options = parseOptions(args.slice(1));
+      if (!options["confirm-broadcast"]) {
+        return fail("send requires --confirm-broadcast because it signs and broadcasts a real transaction");
+      }
+      const chainKey = requiredOption(options, "chain");
+      const to = requiredOption(options, "to");
+      const privateKey = requiredOption(options, "private-key");
+      let valueWei: bigint;
+      if (typeof options["value-wei"] === "string") {
+        valueWei = BigInt(options["value-wei"]);
+      } else if (typeof options.value === "string") {
+        valueWei = parseEthAmount(options.value);
+      } else {
+        return fail("send requires --value <ETH amount> or --value-wei <wei amount>");
+      }
+      const result = await deps.toolRegistry.executeTool("send_eth", {
+        chainKey,
+        to,
+        valueWei: valueWei.toString(),
+        privateKey
+      });
+      return ok(renderSendResult(result));
+    }
+
+    if (command === "transfer") {
+      const options = parseOptions(args.slice(1));
+      if (!options["confirm-broadcast"]) {
+        return fail("transfer requires --confirm-broadcast because it signs and broadcasts a real transaction");
+      }
+      const result = await deps.toolRegistry.executeTool("send_token", {
+        chainKey: requiredOption(options, "chain"),
+        tokenAddress: requiredOption(options, "token"),
+        to: requiredOption(options, "to"),
+        amount: requiredOption(options, "amount"),
+        privateKey: requiredOption(options, "private-key")
+      });
+      return ok(renderTransferResult(result));
     }
 
     if (command === "verify") {

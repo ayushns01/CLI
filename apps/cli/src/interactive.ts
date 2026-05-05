@@ -31,6 +31,8 @@ export interface InteractiveSessionOptions {
 const featureChoices: InteractiveChoice[] = [
   { label: "Check balance              - Read native balance for one address", value: "balance" },
   { label: "Check all testnet balances - Scan configured testnets", value: "allbal" },
+  { label: "Send ETH                   - Transfer native tokens to an address", value: "send" },
+  { label: "Transfer token             - Send ERC-20 tokens to an address", value: "transfer" },
   { label: "Estimate gas               - Preview transaction cost", value: "gas" },
   { label: "Simulate transaction       - Dry-run before signing", value: "simulate" },
   { label: "Trace transaction          - Explain a transaction path", value: "trace" },
@@ -87,6 +89,39 @@ async function buildCommandArgs(
   if (feature === "allbal") {
     const address = await options.prompt.input("Address", { validate: validateAddress });
     return ["allbal", "--testnet", "--address", address];
+  }
+
+  if (feature === "send") {
+    const chain = await selectChain(options);
+    const to = await options.prompt.input("To address or ENS name", { validate: validateAddressOrEns });
+    const value = await options.prompt.input("Amount (ETH)", { validate: validateEthAmount });
+    const privateKey = await options.prompt.input("Private key", { secret: true, validate: validateHex });
+    const confirm = await options.prompt.select("Broadcast real transaction?", [
+      { label: "No, cancel", value: "no" },
+      { label: "Yes, broadcast", value: "yes" }
+    ]);
+    if (confirm !== "yes") {
+      options.write(formatStatus("Send cancelled. No transaction was broadcast.", "warning"));
+      return undefined;
+    }
+    return ["send", "--chain", chain, "--to", to, "--value", value, "--private-key", privateKey, "--confirm-broadcast"];
+  }
+
+  if (feature === "transfer") {
+    const chain = await selectChain(options);
+    const token = await options.prompt.input("Token address", { validate: validateAddress });
+    const to = await options.prompt.input("To address or ENS name", { validate: validateAddressOrEns });
+    const amount = await options.prompt.input("Amount", { validate: validateTokenAmount });
+    const privateKey = await options.prompt.input("Private key", { secret: true, validate: validateHex });
+    const confirm = await options.prompt.select("Broadcast real transaction?", [
+      { label: "No, cancel", value: "no" },
+      { label: "Yes, broadcast", value: "yes" }
+    ]);
+    if (confirm !== "yes") {
+      options.write(formatStatus("Transfer cancelled. No transaction was broadcast.", "warning"));
+      return undefined;
+    }
+    return ["transfer", "--chain", chain, "--token", token, "--to", to, "--amount", amount, "--private-key", privateKey, "--confirm-broadcast"];
   }
 
   if (feature === "gas") {
@@ -417,6 +452,24 @@ export function validateHex(value: string): string | undefined {
   return /^0x[0-9a-fA-F]*$/.test(value)
     ? undefined
     : "Must be valid hex data (0x + hex chars)";
+}
+
+export function validateAddressOrEns(value: string): string | undefined {
+  if (/^0x[0-9a-fA-F]{40}$/.test(value)) return undefined;
+  if (/^[a-zA-Z0-9-]+\.eth$/.test(value.trim())) return undefined;
+  return "Must be a valid address (0x + 40 hex chars) or ENS name (e.g. vitalik.eth)";
+}
+
+export function validateEthAmount(value: string): string | undefined {
+  return /^\d+(\.\d+)?$/.test(value.trim()) && Number(value) > 0
+    ? undefined
+    : "Must be a positive number (e.g. 0.1, 1.5)";
+}
+
+export function validateTokenAmount(value: string): string | undefined {
+  return /^\d+(\.\d+)?$/.test(value.trim()) && Number(value) > 0
+    ? undefined
+    : "Must be a positive number (e.g. 100, 0.5)";
 }
 
 function renderSelect(prompt: string, choices: InteractiveChoice[], selectedIndex: number): string {

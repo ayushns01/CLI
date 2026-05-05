@@ -218,6 +218,150 @@ test("runCli deploy fails when neither --bytecode nor --artifact is provided", a
   assert.deepEqual(calls, []);
 });
 
+test("runCli send requires --confirm-broadcast", async () => {
+  const result = await runCli(
+    ["send", "--chain", "sepolia", "--to", "0x2222222222222222222222222222222222222222", "--value", "0.1", "--private-key", "0x1111111111111111111111111111111111111111111111111111111111111111"],
+    fakeDeps([])
+  );
+
+  assert.equal(result.exitCode, 1);
+  assert.match(result.stderr, /requires --confirm-broadcast/);
+});
+
+test("runCli send routes to send_eth tool with wei conversion", async () => {
+  const calls: ToolCall[] = [];
+  const result = await runCli(
+    [
+      "send",
+      "--chain", "sepolia",
+      "--to", "0x2222222222222222222222222222222222222222",
+      "--value", "0.1",
+      "--private-key", "0x1111111111111111111111111111111111111111111111111111111111111111",
+      "--confirm-broadcast"
+    ],
+    fakeDeps(calls, {
+      send_eth: {
+        chainKey: "sepolia",
+        from: "0x1111111111111111111111111111111111111111",
+        to: "0x2222222222222222222222222222222222222222",
+        valueWei: "100000000000000000",
+        symbol: "ETH",
+        decimals: 18,
+        transactionHash: "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab",
+        blockNumber: "100"
+      }
+    })
+  );
+
+  assert.equal(result.exitCode, 0);
+  assert.match(result.stdout, /chain: sepolia/);
+  assert.match(result.stdout, /0\.1 ETH/);
+  assert.match(result.stdout, /transaction:/);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].name, "send_eth");
+  assert.equal(calls[0].args.chainKey, "sepolia");
+  assert.equal(calls[0].args.to, "0x2222222222222222222222222222222222222222");
+  assert.equal(calls[0].args.valueWei, "100000000000000000");
+});
+
+test("runCli send fails when neither --value nor --value-wei provided", async () => {
+  const result = await runCli(
+    [
+      "send",
+      "--chain", "sepolia",
+      "--to", "0x2222222222222222222222222222222222222222",
+      "--private-key", "0x1111111111111111111111111111111111111111111111111111111111111111",
+      "--confirm-broadcast"
+    ],
+    fakeDeps([])
+  );
+
+  assert.equal(result.exitCode, 1);
+  assert.match(result.stderr, /--value/);
+});
+
+test("runCli transfer requires --confirm-broadcast", async () => {
+  const result = await runCli(
+    ["transfer", "--chain", "sepolia", "--token", "0xtoken", "--to", "0x2222222222222222222222222222222222222222", "--amount", "100", "--private-key", "0x1111111111111111111111111111111111111111111111111111111111111111"],
+    fakeDeps([])
+  );
+
+  assert.equal(result.exitCode, 1);
+  assert.match(result.stderr, /requires --confirm-broadcast/);
+});
+
+test("runCli transfer routes to send_token tool", async () => {
+  const calls: ToolCall[] = [];
+  const result = await runCli(
+    [
+      "transfer",
+      "--chain", "base",
+      "--token", "0x3333333333333333333333333333333333333333",
+      "--to", "0x2222222222222222222222222222222222222222",
+      "--amount", "100",
+      "--private-key", "0x1111111111111111111111111111111111111111111111111111111111111111",
+      "--confirm-broadcast"
+    ],
+    fakeDeps(calls, {
+      send_token: {
+        chainKey: "base",
+        from: "0x1111111111111111111111111111111111111111",
+        to: "0x2222222222222222222222222222222222222222",
+        tokenAddress: "0x3333333333333333333333333333333333333333",
+        symbol: "USDC",
+        decimals: 6,
+        amount: "100",
+        amountWei: "100000000",
+        transactionHash: "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab",
+        blockNumber: "200"
+      }
+    })
+  );
+
+  assert.equal(result.exitCode, 0);
+  assert.match(result.stdout, /chain: base/);
+  assert.match(result.stdout, /USDC/);
+  assert.match(result.stdout, /100 USDC/);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].name, "send_token");
+  assert.equal(calls[0].args.tokenAddress, "0x3333333333333333333333333333333333333333");
+  assert.equal(calls[0].args.amount, "100");
+});
+
+test("runCli transfer renders ENS name alongside resolved address", async () => {
+  const calls: ToolCall[] = [];
+  const result = await runCli(
+    [
+      "transfer",
+      "--chain", "base",
+      "--token", "0x3333333333333333333333333333333333333333",
+      "--to", "0x2222222222222222222222222222222222222222",
+      "--amount", "50",
+      "--private-key", "0x1111111111111111111111111111111111111111111111111111111111111111",
+      "--confirm-broadcast"
+    ],
+    fakeDeps(calls, {
+      send_token: {
+        chainKey: "base",
+        from: "0x1111111111111111111111111111111111111111",
+        to: "0x2222222222222222222222222222222222222222",
+        ensName: "vitalik.eth",
+        tokenAddress: "0x3333333333333333333333333333333333333333",
+        symbol: "USDC",
+        decimals: 6,
+        amount: "50",
+        amountWei: "50000000",
+        transactionHash: "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab",
+        blockNumber: "201"
+      }
+    })
+  );
+
+  assert.equal(result.exitCode, 0);
+  assert.match(result.stdout, /vitalik\.eth/);
+  assert.match(result.stdout, /0x2222/);
+});
+
 test("runCli allbal --testnet selects only testnet chains", async () => {
   const calls: ToolCall[] = [];
   const result = await runCli(
