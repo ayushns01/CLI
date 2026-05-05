@@ -1,98 +1,182 @@
 # ChainMind
 
-ChainMind is an internal design-stage project for a developer-only, AI-native on-chain workstation for EVM teams.
+ChainMind is an EVM developer workstation for the command line. It replaces the tab-switching between Etherscan, wallet extensions, RPC dashboards, and deploy scripts with one tool that handles the full workflow — from checking balances to deploying across ten chains at once.
 
-The product vision is simple: a developer should be able to plan, deploy, interact with, simulate, debug, monitor, and automate smart contract workflows from one system instead of juggling explorers, wallet extensions, RPC dashboards, scripts, and separate CI glue.
+## Install
+
+```bash
+npm install -g chainmind
+```
+
+Requires Node.js 20+. Uses `viem` under the hood. No API keys required for core commands.
+
+## Quick Start
+
+```bash
+# Check balance
+chainmind balance --chain sepolia --address 0xYourAddress
+
+# Estimate gas
+chainmind gas estimate --chain ethereum --from 0x... --to 0x... --data 0x
+
+# Simulate a transaction before signing
+chainmind simulate --chain base --from 0x... --to 0x... --data 0x
+
+# Deploy a contract
+chainmind deploy --chain sepolia --artifact ./out/Token.json --private-key 0x... --confirm-broadcast
+
+# Deploy to multiple chains at once
+chainmind deploy --chain sepolia,base-sepolia,arbitrum-sepolia \
+  --artifact ./out/Token.json --private-key 0x... --confirm-broadcast
+
+# Auto-verify after deploy (requires ETHERSCAN_API_KEY)
+chainmind deploy --chain sepolia --artifact ./out/Token.json \
+  --private-key 0x... --confirm-broadcast \
+  --verify --source ./src/Token.sol --name Token --compiler v0.8.20+commit.a1b79de6
+
+# Verify a previously deployed contract
+chainmind verify --chain sepolia --address 0x1234... \
+  --source ./src/Token.sol --name Token --compiler v0.8.20+commit.a1b79de6
+
+# Trace any transaction
+chainmind trace --chain ethereum --tx 0xYourTxHash
+
+# Fork a chain locally for debugging
+chainmind fork --chain mainnet --port 8545
+
+# Interactive workstation (arrow keys, no flags needed)
+chainmind
+```
+
+## Interactive Mode
+
+Running `chainmind` with no arguments opens a full interactive workstation. Navigate with arrow keys, press Enter to select.
+
+For deploy, a multi-select chain picker lets you toggle multiple chains on/off before broadcasting:
+
+```
+Select chains to deploy to  (↑↓ move  space toggle  enter confirm)
+
+❯ [✓] sepolia
+  [✓] base-sepolia
+  [ ] arbitrum-sepolia
+  [ ] optimism-sepolia
+```
+
+## Supported Chains
+
+| Chain | Key | Verifier |
+|-------|-----|----------|
+| Ethereum | `ethereum` | Etherscan |
+| Base | `base` | Basescan |
+| Arbitrum One | `arbitrum` | Arbiscan |
+| Optimism | `optimism` | Optimistic Etherscan |
+| Polygon | `polygon` | Polygonscan |
+| Sepolia | `sepolia` | Etherscan Sepolia |
+| Base Sepolia | `base-sepolia` | Basescan Sepolia |
+| Arbitrum Sepolia | `arbitrum-sepolia` | Arbiscan Sepolia |
+| Optimism Sepolia | `optimism-sepolia` | Optimism Sepolia |
+
+Custom chains and RPC overrides are configured in `.chainmind.yaml`.
+
+## Configuration
+
+Create a `.chainmind.yaml` in your project root:
+
+```yaml
+rpcOverrides:
+  ethereum:
+    - https://your-alchemy-endpoint.g.alchemy.com/v2/key
+  sepolia:
+    - https://your-alchemy-endpoint.g.alchemy.com/v2/key
+
+chainAliases:
+  mainnet: ethereum
+  l2: base
+
+environments:
+  prod:
+    rpcOverrides:
+      ethereum:
+        - https://prod-rpc.example.com
+```
+
+Switch environments with `CHAINMIND_ENV=prod chainmind deploy ...`
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `balance` | Native balance for an address on a specific chain |
+| `allbal` | Scan all testnets for an address balance |
+| `gas estimate` | Preview gas cost before sending |
+| `simulate` | Dry-run a transaction — see success/revert and state changes |
+| `trace` | Decode a transaction's full call tree |
+| `deploy` | Deploy a contract from a compiled artifact or raw bytecode |
+| `verify` | Verify source code on Etherscan-compatible explorers |
+| `fork` | Spin up a local Anvil fork of any supported chain |
+| `monitor start` | Start the background monitoring engine |
+
+## Multi-Chain Deploy
+
+Deploy the same contract to any number of chains in a single command. Results are shown per-chain:
+
+```
+Multi-chain deploy: Token
+──────────────────────────────────────────────────────────────
+  ✓  sepolia           0x1234...abcd  tx: 0xabc...
+  ✓  base-sepolia      0x1234...abcd  tx: 0xdef...
+  ✗  arbitrum-sepolia  failed: insufficient funds
+──────────────────────────────────────────────────────────────
+Deployed: 2/3 chains
+```
+
+## Contract Verification
+
+After a successful deploy, pass `--verify` to automatically submit source code to the chain's block explorer (Etherscan, Basescan, Arbiscan, etc.) and poll until verified.
+
+Requires:
+- `ETHERSCAN_API_KEY` environment variable (free at [etherscan.io](https://etherscan.io/apis))
+- `--source` path to the flat `.sol` file
+- `--compiler` full version string (e.g. `v0.8.20+commit.a1b79de6`)
+
+## Architecture
+
+| Package | Responsibility |
+|---------|---------------|
+| `apps/cli` | CLI entrypoint, command routing, interactive TUI |
+| `packages/chains` | Chain registry, metadata, RPC URLs, verifier endpoints |
+| `packages/config` | `.chainmind.yaml` loading and environment resolution |
+| `packages/rpc` | RPC manager and provider benchmarking |
+| `packages/wallet` | Wallet storage, signers, session scopes |
+| `packages/tx` | Calldata encoding, gas estimation, simulation, broadcast |
+| `packages/contracts` | Artifact ingestion, deploy, verification, contract studio |
+| `packages/debug` | Transaction tracing, revert decoding, Anvil fork runner |
+| `packages/memory` | SQLite workspace state and run history |
+| `packages/agent` | Intent parsing, planner, tool registry, approval gates |
+| `packages/monitor` | Scheduler, watchers, alerts, policy runner |
+| `packages/platform` | Policies, audit logs, team-mode services |
 
 ## Status
 
-Tasks 1–11 are implemented and merged. The deterministic core, agent runtime, and monitoring engine are all functional with 120 passing tests.
+199 tests passing. All core commands are wired to real viem RPC clients.
 
-| Task | Package | Description |
-|------|---------|-------------|
-| 1 | `apps/cli` | Monorepo bootstrap and base CLI |
-| 2 | `packages/config`, `packages/chains` | Config loading and chain registry |
-| 3 | `packages/wallet` | Wallet storage, signer abstractions, session scopes |
-| 4 | `packages/rpc` | RPC manager and provider benchmarking |
-| 5 | `packages/tx` | Core commands: balance, calldata, gas, sign-message |
-| 6 | `packages/contracts` | Artifact ingestion, ERC-20 deploy, generic contract deploy |
-| 7 | `packages/contracts`, `packages/tx` | Contract studio, previews, and simulation |
-| 8 | `packages/debug` | Trace, fork, and debug workflows |
-| 9 | `packages/memory` | Workspace memory, run history, `.chainmind.yaml` |
-| 10 | `packages/agent` | Agentic AI runtime with intent parsing and approval gates |
-| 11 | `packages/monitor` | Monitoring engine: scheduler, watchers, alerts, policy runner |
-
-## Implementation Direction
-
-The current implementation choice is:
-
-- TypeScript and Node.js for the CLI, runtime, shared platform packages, and agent layer
-- `viem` for EVM interaction
-- `oclif` for the CLI command framework
-- SQLite for local-first persistence
-- Next.js for the web companion
-- Vitest for automated testing
-
-This replaces the earlier Go-first assumption in the initial draft planning notes.
-
-For the current bootstrap phase, the repo uses:
-
-- npm workspaces instead of `pnpm`, because `pnpm` is not installed in the local environment yet
-- Node 25's `--experimental-strip-types` support to run `.ts` files without a transpile step
-- Node's built-in test runner for the first CLI smoke test
-
-This keeps the initial scaffold dependency-light while preserving the TypeScript-first direction.
-
-## Product Definition
-
-ChainMind is:
-
-- an AI-aware developer workstation, not just a thin CLI wrapper
-- a deterministic execution platform with an agent runtime on top
-- a developer tool for EVM builders and teams
-- a CLI-first system with a later first-class web companion
-
-ChainMind is not:
-
-- a retail trading product
-- a consumer wallet replacement
-- an unsupervised autonomous fund manager
-- an excuse to let LLM output bypass execution safety controls
-
-## Core Jobs
-
-- Turn natural language or explicit commands into safe, reviewable on-chain workflows
-- Deploy, verify, upgrade, and interact with contracts across chains
-- Simulate and explain transaction outcomes before money moves
-- Diagnose failed transactions with traces, decoded calldata, and plain-English reasoning
-- Persist project context so repeated workflows get faster over time
-- Support background monitoring, automation, CI/CD, and later team collaboration
-
-## Documentation Map
-
-- [Master design spec](docs/superpowers/specs/2026-04-20-chainmind-design.md)
-- [Product overview](docs/product.md)
-- [System architecture](docs/architecture.md)
-- [Threat model](docs/threat-model.md)
-- [Delivery roadmap](docs/roadmap.md)
-- [Module docs](docs/modules/)
-- [Architecture decision records](docs/decisions/)
-
-## Document Set
-
-The docs are intentionally layered:
-
-1. `README.md` orients a new internal reader quickly.
-2. The master design spec captures the full-project definition in one place.
-3. Architecture and product docs explain the platform from different angles.
-4. Module docs define boundaries and responsibilities.
-5. ADRs record the important choices that should not be rediscovered later.
+| Area | Status |
+|------|--------|
+| Core commands (balance, gas, simulate, trace, deploy) | ✅ |
+| Multi-chain deploy | ✅ |
+| Contract verification (Etherscan-compatible) | ✅ |
+| Interactive TUI with arrow-key navigation | ✅ |
+| Artifact-based deploy (Hardhat + Foundry JSON) | ✅ |
+| Local fork debugging (Anvil) | ✅ |
+| Workspace memory and run history | ✅ |
+| Background monitoring engine | ✅ |
+| Agent runtime scaffolding | ✅ |
 
 ## Guiding Principles
 
 - AI proposes, deterministic systems execute.
 - Read, simulate, sign, and broadcast are distinct permission levels.
-- Local-first defaults reduce cost, latency, and operational risk.
-- Every sensitive action must be inspectable after the fact.
-- Multi-chain support is a core platform concern, not a plugin afterthought.
-- The CLI remains the primary control plane even after the web companion ships.
+- Local-first defaults — no cloud dependency for core workflows.
+- Every sensitive action requires explicit confirmation before broadcast.
+- Multi-chain is a core concern, not an afterthought.
