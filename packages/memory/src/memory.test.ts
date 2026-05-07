@@ -108,3 +108,23 @@ test("workspace memory persists preferences and environment profiles", () => {
 
   store.close();
 });
+
+
+test('address book saves, lists, removes, and resolves addresses', () => {
+  const store = createStore();
+  const now = new Date().toISOString();
+  store.saveAddress({ name: 'treasury', address: '0x123', chainKey: 'sepolia', createdAt: now });
+  store.saveAddress({ name: 'vitalik', address: '0xabc', createdAt: now });
+  assert.equal(store.listAddresses().length, 2);
+  const treasury = store.getAddress('treasury');
+  assert.equal(treasury?.address, '0x123');
+  assert.equal(treasury?.chainKey, 'sepolia');
+  assert.equal(store.resolveAddress('treasury'), '0x123');
+  assert.equal(store.resolveAddress('0x456'), '0x456');
+  assert.equal(store.resolveAddress('name.eth'), 'name.eth');
+  assert.throws(() => store.resolveAddress('unknown'), /not found/);
+  store.removeAddress('treasury');
+  assert.equal(store.listAddresses().length, 1);
+  assert.equal(store.getAddress('treasury'), undefined);
+  store.close();
+});

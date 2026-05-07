@@ -1,11 +1,13 @@
 import { DatabaseSync } from "node:sqlite";
 
 import type {
+  AddressEntry,
   AlertRecord,
   AuditRecord,
   ContractMemoryRecord,
   EnvironmentProfile,
   RunHistoryRecord,
+  AddressEntry,
   WalletMemoryRecord,
   WorkspacePreferences
 } from "./models.ts";
@@ -273,6 +275,52 @@ export class SqliteWorkspaceStore {
     this.db.close();
   }
 
+  saveAddress(entry: AddressEntry): void {
+    this.db
+      .prepare(
+        `insert into addresses (name, address, chain_key, created_at)
+         values (?, ?, ?, ?)
+         on conflict(name) do update set
+           address = excluded.address,
+           chain_key = excluded.chain_key`
+      )
+      .run(
+        entry.name,
+        entry.address,
+        entry.chainKey ?? null,
+        entry.createdAt
+      );
+  }
+
+  getAddress(name: string): AddressEntry | undefined {
+    const row = this.db
+      .prepare("select name, address, chain_key, created_at from addresses where name = ?")
+      .get(name) as AddressRow | undefined;
+    return row ? mapAddress(row) : undefined;
+  }
+
+  listAddresses(): AddressEntry[] {
+    return (this.db
+      .prepare("select name, address, chain_key, created_at from addresses order by name")
+      .all() as AddressRow[]).map(mapAddress);
+  }
+
+  removeAddress(name: string): boolean {
+    const info = this.db.prepare("delete from addresses where name = ?").run(name);
+    return info.changes > 0;
+  }
+
+  resolveAddress(nameOrAddress: string): string {
+    if (nameOrAddress.startsWith("0x") || nameOrAddress.endsWith(".eth")) {
+      return nameOrAddress;
+    }
+    const entry = this.getAddress(nameOrAddress);
+    if (!entry) {
+      throw new Error(`Address not found: ${nameOrAddress}`);
+    }
+    return entry.address;
+  }
+
   private migrate(): void {
     this.db.exec(`
       create table if not exists wallets (
@@ -314,6 +362,21 @@ export class SqliteWorkspaceStore {
         rpc_overrides_json text not null
       );
 
+      create table if not exists addresses (
+        name text primary key,
+        address text not null,
+        chain_key text,
+        created_at text not null
+      );
+
+
+      create table if not exists addresses (
+        name text primary key,
+        address text not null,
+        chain_key text,
+        created_at text not null
+      );
+
       create table if not exists alerts (
         id text primary key,
         type text not null,
@@ -339,6 +402,22 @@ export class SqliteWorkspaceStore {
       );
     `);
   }
+}
+
+interface AddressRow {
+  name: string;
+  address: string;
+  chain_key: string | null;
+  created_at: string;
+}
+
+function mapAddress(row: AddressRow): AddressEntry {
+  return {
+    name: row.name,
+    address: row.address,
+    chainKey: row.chain_key ?? undefined,
+    createdAt: row.created_at
+  };
 }
 
 interface WalletRow {
@@ -376,6 +455,13 @@ interface EnvironmentRow {
   name: string;
   default_chain: string | null;
   rpc_overrides_json: string;
+}
+
+interface AddressRow {
+  name: string;
+  address: string;
+  chain_key: string | null;
+  created_at: string;
 }
 
 function mapWallet(row: WalletRow): WalletMemoryRecord {

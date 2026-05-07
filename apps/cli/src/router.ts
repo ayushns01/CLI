@@ -1,3 +1,6 @@
+import { SqliteWorkspaceStore } from "../../../packages/memory/src/sqlite-store.ts";
+import { renderAddressList, renderAddressEntry } from "./commands/address.ts";
+
 import { existsSync, readFileSync } from "node:fs";
 import { parseEthAmount } from "../../../packages/rpc/src/viem-clients.ts";
 
@@ -33,6 +36,7 @@ export interface CliChainRegistry {
 export interface CliDependencies {
   toolRegistry: Pick<ToolRegistry, "executeTool">;
   chainRegistry: CliChainRegistry;
+  store: SqliteWorkspaceStore;
 }
 
 export interface CliDependencyOptions {
@@ -48,9 +52,11 @@ export function createDefaultCliDependencies(options: CliDependencyOptions = {})
     options.environment ?? process.env.CHAINMIND_ENV
   );
   const chainRegistry = createChainRegistry(chains);
+  const store = new SqliteWorkspaceStore();
   return {
     chainRegistry,
-    toolRegistry: createRealToolRegistry({ chainRegistry })
+    toolRegistry: createRealToolRegistry({ chainRegistry }),
+    store
   };
 }
 
@@ -65,11 +71,48 @@ export async function runCli(
 
     const [command, subcommand, ...rest] = args;
 
+    if (command === "address") {
+      const options = parseOptions(args.slice(1));
+      const subCmd = subcommand;
+      if (!subCmd || subCmd === "list") {
+        return ok(renderAddressList(deps.store.listAddresses()));
+      }
+      if (subCmd === "add") {
+        const name = rest[0];
+        const address = rest[1];
+        if (!name || !address) {
+          return err("Usage: chainmind address add <name> <address> [--chain <chainKey>]");
+        }
+        deps.store.saveAddress({
+          name,
+          address,
+          chainKey: (options.chain as string) ?? undefined,
+          createdAt: new Date().toISOString()
+        });
+        return ok(`Address '${name}' added successfully.`);
+      }
+      if (subCmd === "get") {
+        const name = rest[0];
+        if (!name) return err("Usage: chainmind address get <name>");
+        const entry = deps.store.getAddress(name);
+        if (!entry) return err(`Address not found: ${name}`);
+        return ok(renderAddressEntry(entry));
+      }
+      if (subCmd === "remove") {
+        const name = rest[0];
+        if (!name) return err("Usage: chainmind address remove <name>");
+        const removed = deps.store.removeAddress(name);
+        if (!removed) return err(`Address not found: ${name}`);
+        return ok(`Address '${name}' removed.`);
+      }
+      return err(`Unknown address command: ${subCmd}`);
+    }
+
     if (command === "balance") {
       const options = parseOptions(args.slice(1));
       const result = await deps.toolRegistry.executeTool("balance", {
         chainKey: requiredOption(options, "chain"),
-        address: requiredOption(options, "address")
+        address: deps.store.resolveAddress(requiredOption(options, "address"))
       });
       return ok(renderBalanceToolResult(result));
     }
@@ -80,7 +123,7 @@ export async function runCli(
         ? deps.chainRegistry.all().filter((chain) => chain.environment === "testnet").map((chain) => chain.key)
         : parseCsvOption(options.chains);
       const result = await deps.toolRegistry.executeTool("balances_multi", {
-        address: requiredOption(options, "address"),
+        address: deps.store.resolveAddress(requiredOption(options, "address")),
         ...(chainKeys.length > 0 ? { chainKeys } : {})
       });
       return ok(renderAllBalancesToolResult(result));
@@ -90,8 +133,8 @@ export async function runCli(
       const options = parseOptions(rest);
       const result = await deps.toolRegistry.executeTool("estimate_gas", {
         chainKey: requiredOption(options, "chain"),
-        from: requiredOption(options, "from"),
-        to: requiredOption(options, "to"),
+        from: deps.store.resolveAddress(requiredOption(options, "from")),
+        to: deps.store.resolveAddress(requiredOption(options, "to")),
         data: options.data ?? "0x",
         valueWei: options["value-wei"] ?? "0"
       });
@@ -102,8 +145,8 @@ export async function runCli(
       const options = parseOptions(args.slice(1));
       const result = await deps.toolRegistry.executeTool("simulate_tx", {
         chainKey: requiredOption(options, "chain"),
-        from: requiredOption(options, "from"),
-        to: requiredOption(options, "to"),
+        from: deps.store.resolveAddress(requiredOption(options, "from")),
+        to: deps.store.resolveAddress(requiredOption(options, "to")),
         data: options.data ?? "0x",
         valueWei: options["value-wei"] ?? "0"
       });
@@ -182,7 +225,7 @@ export async function runCli(
         return fail("send requires --confirm-broadcast because it signs and broadcasts a real transaction");
       }
       const chainKey = requiredOption(options, "chain");
-      const to = requiredOption(options, "to");
+      const to = deps.store.resolveAddress(requiredOption(options, "to"));
       const privateKey = requiredOption(options, "private-key");
       let valueWei: bigint;
       if (typeof options["value-wei"] === "string") {
@@ -208,8 +251,8 @@ export async function runCli(
       }
       const result = await deps.toolRegistry.executeTool("send_token", {
         chainKey: requiredOption(options, "chain"),
-        tokenAddress: requiredOption(options, "token"),
-        to: requiredOption(options, "to"),
+        tokenAddress: deps.store.resolveAddress(requiredOption(options, "token")),
+        to: deps.store.resolveAddress(requiredOption(options, "to")),
         amount: requiredOption(options, "amount"),
         privateKey: requiredOption(options, "private-key")
       });
@@ -219,7 +262,7 @@ export async function runCli(
     if (command === "verify") {
       const options = parseOptions(args.slice(1));
       const chainKey = requiredOption(options, "chain");
-      const address = requiredOption(options, "address");
+      const address = deps.store.resolveAddress(requiredOption(options, "address"));
       const output = await runVerification(address, chainKey, options, deps);
       return ok(output);
     }

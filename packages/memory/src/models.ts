@@ -63,3 +63,10 @@ export interface AuditRecord {
   reason?: string;
   metadata?: string;          // JSON-serialised Record<string, unknown>
 }
+
+export interface AddressEntry {
+  name: string;       // "MyToken", "vitalik", "treasury"
+  address: string;    // "0xabc..."
+  chainKey?: string;  // optional — null means valid on all chains
+  createdAt: string;  // ISO-8601
+}

@@ -26,5 +26,8 @@
     "test:wallet": "node --experimental-strip-types --test packages/wallet/src/wallet.test.ts",
     "test:agent": "node --experimental-strip-types --test packages/agent/src/agent.test.ts tests/e2e/agent-workflows.test.ts",
     "typecheck": "node --experimental-strip-types apps/cli/src/index.ts --help"
+  },
+  "dependencies": {
+    "viem": "^2.48.8"
   }
 }
