@@ -7,7 +7,6 @@ import type {
   ContractMemoryRecord,
   EnvironmentProfile,
   RunHistoryRecord,
-  AddressEntry,
   WalletMemoryRecord,
   WorkspacePreferences
 } from "./models.ts";
@@ -369,14 +368,6 @@ export class SqliteWorkspaceStore {
         created_at text not null
       );
 
-
-      create table if not exists addresses (
-        name text primary key,
-        address text not null,
-        chain_key text,
-        created_at text not null
-      );
-
       create table if not exists alerts (
         id text primary key,
         type text not null,
@@ -426,6 +417,7 @@ interface WalletRow {
   signer_type: string;
 }
 
+
 interface ContractRow {
   name: string;
   chain_key: string;
@@ -455,13 +447,6 @@ interface EnvironmentRow {
   name: string;
   default_chain: string | null;
   rpc_overrides_json: string;
-}
-
-interface AddressRow {
-  name: string;
-  address: string;
-  chain_key: string | null;
-  created_at: string;
 }
 
 function mapWallet(row: WalletRow): WalletMemoryRecord {

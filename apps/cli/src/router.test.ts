@@ -457,11 +457,6 @@ test("createDefaultCliDependencies applies CHAINMIND_ENV environment rpcOverride
   }
 });
 
-interface ToolCall {
-  name: string;
-  args: Record<string, unknown>;
-}
-
 test("runCli deploys to multiple chains when --chain is comma-separated", async () => {
   const calls: ToolCall[] = [];
   const deployResult = {
@@ -517,7 +512,8 @@ test("runCli multi-chain deploy shows failed chains and still reports partial su
           };
         }
       },
-      chainRegistry: fakeChainRegistry()
+      chainRegistry: fakeChainRegistry(),
+      store: fakeStore()
     }
   );
 
@@ -570,6 +566,24 @@ function fakeChainRegistry() {
   };
 }
 
+function fakeStore() {
+  const addresses: Map<string, { name: string; address: string; chainKey?: string; createdAt: string }> = new Map();
+  return {
+    saveAddress: (entry: { name: string; address: string; chainKey?: string; createdAt: string }) => {
+      addresses.set(entry.name, entry);
+    },
+    getAddress: (name: string) => addresses.get(name),
+    listAddresses: () => [...addresses.values()],
+    removeAddress: (name: string) => addresses.delete(name),
+    resolveAddress: (nameOrAddress: string) => {
+      if (nameOrAddress.startsWith("0x") || nameOrAddress.endsWith(".eth")) return nameOrAddress;
+      const entry = addresses.get(nameOrAddress);
+      if (!entry) throw new Error(`Address not found: ${nameOrAddress}`);
+      return entry.address;
+    }
+  };
+}
+
 function fakeDeps(calls: ToolCall[], responses: Record<string, unknown> = {}) {
   return {
     toolRegistry: {
@@ -578,7 +592,8 @@ function fakeDeps(calls: ToolCall[], responses: Record<string, unknown> = {}) {
         return responses[name] ?? {};
       }
     },
-    chainRegistry: fakeChainRegistry()
+    chainRegistry: fakeChainRegistry(),
+    store: fakeStore()
   };
 }
 
