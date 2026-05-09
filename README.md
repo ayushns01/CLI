@@ -114,8 +114,55 @@ Switch environments with `CHAINMIND_ENV=prod chainmind deploy ...`
 | `trace` | Decode a transaction's full call tree |
 | `deploy` | Deploy a contract from a compiled artifact or raw bytecode |
 | `verify` | Verify source code on Etherscan-compatible explorers |
+| `send` | Send native ETH to any address or ENS name |
+| `transfer` | Transfer an ERC-20 token to any address or ENS name |
+| `address add` | Save a named address to the local address book |
+| `address list` | List all saved addresses |
+| `address get` | Look up a saved address by name |
+| `address remove` | Remove an address from the book |
 | `fork` | Spin up a local Anvil fork of any supported chain |
 | `monitor start` | Start the background monitoring engine |
+
+## Sending ETH and Tokens
+
+Send native ETH or any ERC-20 token with a single command. ENS names are resolved automatically — no need to look up addresses first.
+
+```bash
+# Send ETH
+chainmind send --chain ethereum \
+  --to vitalik.eth --value 0.01 \
+  --private-key 0x... --confirm-broadcast
+
+# Transfer an ERC-20 token
+chainmind transfer --chain base \
+  --token 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 \
+  --to friend.eth --amount 100 \
+  --private-key 0x... --confirm-broadcast
+```
+
+The interactive TUI shows a wallet preview (derived from the private key) and a transaction summary box before asking for confirmation.
+
+## Address Book
+
+Save frequently used addresses locally so you never have to paste a hex address again. Any command that accepts an address also accepts a saved name.
+
+```bash
+# Save addresses
+chainmind address add treasury 0x1234...abcd
+chainmind address add usdc 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --chain ethereum
+
+# Use a name anywhere an address is accepted
+chainmind balance --chain ethereum --address treasury
+chainmind transfer --chain ethereum --token usdc --to treasury --amount 500 \
+  --private-key 0x... --confirm-broadcast
+
+# Manage the book
+chainmind address list
+chainmind address get treasury
+chainmind address remove treasury
+```
+
+Addresses are stored locally in SQLite — no account or cloud sync required.
 
 ## Multi-Chain Deploy
 
@@ -159,7 +206,7 @@ Requires:
 
 ## Status
 
-199 tests passing. All core commands are wired to real viem RPC clients.
+210 tests passing. All core commands are wired to real viem RPC clients.
 
 | Area | Status |
 |------|--------|
@@ -168,6 +215,9 @@ Requires:
 | Contract verification (Etherscan-compatible) | ✅ |
 | Interactive TUI with arrow-key navigation | ✅ |
 | Artifact-based deploy (Hardhat + Foundry JSON) | ✅ |
+| Send ETH and ERC-20 transfers | ✅ |
+| ENS name resolution | ✅ |
+| Local address book | ✅ |
 | Local fork debugging (Anvil) | ✅ |
 | Workspace memory and run history | ✅ |
 | Background monitoring engine | ✅ |
